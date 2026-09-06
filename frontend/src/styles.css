@@ -513,21 +513,8 @@ dialog::backdrop {
   }
 }
 
-.add-account {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+.add-app {
   margin-top: 16px;
-  font-size: 15px;
-}
-.add-account > svg {
-  width: 22px;
-  height: 22px;
-}
-.add-account a[aria-disabled="true"] {
-  color: #777;
-  text-decoration: none;
 }
 .message-field > .message-account {
   display: block;

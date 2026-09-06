@@ -8,6 +8,7 @@ timezones, notification controls, payment system, or team administration.
 
 - Connect multiple GitHub and Slack accounts via OAuth. Slack connections distinguish
   both workspace and user. Each identity belongs to only one I’ll Be Back account.
+  A single “Add an app” button opens a modal to choose the provider.
   Add another account without disconnecting an existing one; reconnecting the same
   identity refreshes it without duplicates. Any linked identity can sign in.
 - Away persists until manually cleared. Slack: custom status and palm emoji.

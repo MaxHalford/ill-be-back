@@ -4,6 +4,7 @@ import {
   ExternalLink,
   LoaderCircle,
   LogOut,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Unplug,
@@ -195,13 +196,15 @@ export default function App() {
       {(["slack", "github"] as Provider[]).map((provider) => (
         <a
           key={provider}
-          className={`connect-option ${!state.providers[provider] ? "disabled" : ""}`}
-          href={state.providers[provider] ? `/auth/${provider}` : undefined}
-          aria-disabled={!state.providers[provider]}
+          className={`connect-option ${!state.providers[provider] || busy ? "disabled" : ""}`}
+          href={
+            state.providers[provider] && !busy ? `/auth/${provider}` : undefined
+          }
+          aria-disabled={!state.providers[provider] || busy}
         >
           <AppIcon app={provider} />
           <span>
-            Continue with {names[provider]}
+            {names[provider]}
             {!state.providers[provider] && <small>Not available yet</small>}
           </span>
         </a>
@@ -361,28 +364,14 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {(["slack", "github"] as Provider[]).map((provider) => (
-              <div className="add-account" key={provider}>
-                <AppIcon app={provider} />
-                <a
-                  href={
-                    state.providers[provider] && !busy
-                      ? `/auth/${provider}`
-                      : undefined
-                  }
-                  aria-disabled={!state.providers[provider] || busy}
-                >
-                  {connections.some((c) => c.provider === provider)
-                    ? "Add another"
-                    : "Connect"}{" "}
-                  {names[provider]} account
-                </a>
-                {!loading && !state.providers[provider] && (
-                  <span className="small">Not available yet</span>
-                )}
-              </div>
-            ))}
           </div>
+          <button
+            className="text-button add-app"
+            disabled={loading || busy}
+            onClick={() => setModal("connect")}
+          >
+            <Plus size={16} /> Add an app
+          </button>
           <p className="small coming-next">
             Gmail and Google Calendar are next.
           </p>
@@ -419,10 +408,10 @@ export default function App() {
           </button>
           {modal === "connect" && (
             <>
-              <h2 id="dialog-title">Connect an app</h2>
+              <h2 id="dialog-title">Add an app</h2>
               <p>
-                Sign in with an app to connect an account. You can add more
-                accounts afterwards.
+                Choose an app to connect. You can add multiple accounts for each
+                app.
               </p>
               {connectionButtons}
               <div className="privacy-note">

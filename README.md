@@ -41,8 +41,8 @@ Use separate local OAuth apps with callbacks on `http://localhost:8000`.
 
 ## OAuth setup
 
-Connecting the first account also signs the user in. While signed in, use **Add another**
-to connect more accounts from the same provider or a different provider. Each connection
+Connecting the first account also signs the user in. While signed in, use **Add an app**
+and choose a provider in the picker to connect more accounts. Each connection
 has its own message and update result; the main switch updates all of them. Slack identities
 include both workspace and user, so multiple users in one workspace are supported.
 Any connected identity can sign back into the same account. An external identity belongs
