@@ -211,7 +211,7 @@ func (a *Server) exchange(ctx context.Context, provider, code, verifier string) 
 	if user.UserID == "" || user.TeamID == "" || user.UserID != access.AuthedUser.ID {
 		return identity{}, errors.New("invalid Slack identity")
 	}
-	return identity{user.TeamID + ":" + user.UserID, user.Team, user.User, access.AuthedUser.Token}, nil
+	return identity{user.TeamID + ":" + user.UserID, user.Team + " · @" + user.User, user.User, access.AuthedUser.Token}, nil
 }
 
 func hasScope(scopes, required string) bool {

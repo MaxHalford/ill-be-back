@@ -19,6 +19,7 @@ import (
 )
 
 type Connection struct {
+	ID             string  `json:"id"`
 	Provider       string  `json:"provider"`
 	Label          string  `json:"label"`
 	Message        string  `json:"message"`
@@ -75,6 +76,10 @@ func openStore(dsn string, key []byte) (*store, error) {
 			return nil, err
 		}
 	}
+	if err = s.migrateConnections(ctx, driver); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -122,7 +127,7 @@ func (s *store) decrypt(token, identity string) (string, error) {
 }
 
 func (s *store) connections(ctx context.Context, account string) ([]Connection, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT provider,label,message,applied_message,status,error,reconnect,updated_at,remote_id,token FROM connections WHERE account_id=$1 ORDER BY provider`, account)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,provider,label,message,applied_message,status,error,reconnect,updated_at,remote_id,token FROM connections WHERE account_id=$1 ORDER BY provider,label,id`, account)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +136,7 @@ func (s *store) connections(ctx context.Context, account string) ([]Connection, 
 	for rows.Next() {
 		var c Connection
 		var reconnect int
-		if err := rows.Scan(&c.Provider, &c.Label, &c.Message, &c.AppliedMessage, &c.Status, &c.Error, &reconnect, &c.UpdatedAt, &c.remoteID, &c.token); err != nil {
+		if err := rows.Scan(&c.ID, &c.Provider, &c.Label, &c.Message, &c.AppliedMessage, &c.Status, &c.Error, &reconnect, &c.UpdatedAt, &c.remoteID, &c.token); err != nil {
 			return nil, err
 		}
 		c.NeedsReconnect = reconnect != 0
@@ -163,4 +168,64 @@ func (s *store) lock(ctx context.Context, account string) (func(), error) {
 			fmt.Println("could not release account update lease")
 		}
 	}, nil
+}
+
+// Rebuild the original provider-keyed table atomically, preserving encrypted tokens
+// and preferences. The migration marker prevents a restart from copying stale data.
+func (s *store) migrateConnections(ctx context.Context, driver string) error {
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)`); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if driver == "pgx" {
+		if _, err = tx.ExecContext(ctx, `LOCK TABLE schema_migrations IN EXCLUSIVE MODE`); err != nil {
+			return err
+		}
+	}
+	var count int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version=2`).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if driver == "pgx" {
+			if _, err = tx.ExecContext(ctx, `LOCK TABLE connections IN ACCESS EXCLUSIVE MODE`); err != nil {
+				return err
+			}
+		}
+		for _, statement := range []string{
+			`CREATE TABLE connections_v2 (
+   id TEXT PRIMARY KEY,
+   account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+   provider TEXT NOT NULL, remote_id TEXT NOT NULL, label TEXT NOT NULL, token TEXT NOT NULL,
+   message TEXT NOT NULL DEFAULT 'Out of office', applied_message TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'unknown',
+   error TEXT NOT NULL DEFAULT '', reconnect INTEGER NOT NULL DEFAULT 0, updated_at TEXT,
+   UNIQUE(provider, remote_id)
+  )`,
+			`INSERT INTO connections_v2 SELECT 'legacy:' || provider || ':' || remote_id, account_id, provider, remote_id, label, token, message, applied_message, status, error, reconnect, updated_at FROM connections`,
+			`DROP TABLE connections`,
+			`ALTER TABLE connections_v2 RENAME TO connections`,
+			`CREATE INDEX connections_account ON connections(account_id)`,
+			`INSERT INTO schema_migrations(version) VALUES(2)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
+		}
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version=3`).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err = tx.ExecContext(ctx, `ALTER TABLE sessions ADD COLUMN oauth_connection TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES(3)`); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

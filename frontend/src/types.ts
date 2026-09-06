@@ -1,6 +1,7 @@
 export type Provider = "github" | "slack";
 export type Availability = "available" | "away";
 export type Connection = {
+  id: string;
   provider: Provider;
   label: string;
   message: string;

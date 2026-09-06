@@ -22,46 +22,17 @@ const empty: AppState = {
   providers: { github: false, slack: false },
   csrfToken: "",
 };
-const previewConnections: Connection[] = [
-  {
-    provider: "slack",
-    label: "Your workspace",
-    message: "Out of office",
-    appliedMessage: "",
-    status: "available",
-    error: "",
-    needsReconnect: false,
-    updatedAt: null,
-  },
-  {
-    provider: "github",
-    label: "Your profile",
-    message: "Out of office",
-    appliedMessage: "",
-    status: "available",
-    error: "",
-    needsReconnect: false,
-    updatedAt: null,
-  },
-];
-
 export default function App() {
   const [state, setState] = useState<AppState>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState(false);
-  const [demoConnections, setDemoConnections] = useState(previewConnections);
-  const [demoStatus, setDemoStatus] = useState<Availability>("available");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState<"settings" | "connect" | null>(null);
-  const [messages, setMessages] = useState<Record<Provider, string>>({
-    github: "Out of office",
-    slack: "Out of office",
-  });
-  const [disconnecting, setDisconnecting] = useState<Provider | null>(null);
+  const [messages, setMessages] = useState<Record<string, string>>({});
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
-  const connections = preview ? demoConnections : state.connections;
-  const desired = preview ? demoStatus : state.desiredStatus;
+  const connections = state.connections;
+  const desired = state.desiredStatus;
   const away = desired === "away";
   const succeeded = connections.filter(
     (c) => c.status === desired && !c.error,
@@ -81,6 +52,8 @@ export default function App() {
           "Connection cancelled. You can try again whenever you’re ready.",
         oauth: "We couldn’t connect that account. Please try again.",
         state: "That connection link expired. Please try connecting again.",
+        wrong_account:
+          "That is a different account. Please reconnect using the original account.",
         linked: "That account is already linked to another sign-in.",
         unavailable:
           "This connection isn’t available yet. Please try again later.",
@@ -102,68 +75,48 @@ export default function App() {
   // A refresh on returning to this tab picks up changes made from another device.
   useEffect(() => {
     const refresh = () => {
-      if (!document.hidden && !busy && !preview)
+      if (!document.hidden && !busy)
         getState()
           .then(setState)
           .catch(() => {});
     };
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
-  }, [busy, preview]);
+  }, [busy]);
 
   function openSettings() {
-    setMessages({
-      github:
-        connections.find((c) => c.provider === "github")?.message ||
-        "Out of office",
-      slack:
-        connections.find((c) => c.provider === "slack")?.message ||
-        "Out of office",
-    });
+    setMessages(Object.fromEntries(connections.map((c) => [c.id, c.message])));
     setDisconnecting(null);
     setModal("settings");
   }
 
   async function update(target: Availability) {
-    if (!preview && !state.authenticated) {
+    if (!state.authenticated) {
       setModal("connect");
       return;
     }
     setBusy(true);
     setNotice("");
     try {
-      if (preview) {
-        setDemoStatus(target);
-        setDemoConnections((cs) =>
-          cs.map((c) => ({
-            ...c,
-            status: target,
-            appliedMessage: c.message,
-            updatedAt: new Date().toISOString(),
-          })),
-        );
-      } else
-        setState(
-          await request<AppState>("status", state.csrfToken, {
-            status: target,
-          }),
-        );
+      setState(
+        await request<AppState>("status", state.csrfToken, {
+          status: target,
+        }),
+      );
     } catch (e) {
       setNotice((e as Error).message);
-      if (!preview) {
-        setState((current) => ({
-          ...current,
-          desiredStatus: target,
-          connections: current.connections.map((c) => ({
-            ...c,
-            status: "unknown",
-            error: "Update not confirmed. Check your connection, then retry.",
-          })),
-        }));
-        getState()
-          .then(setState)
-          .catch(() => {});
-      }
+      setState((current) => ({
+        ...current,
+        desiredStatus: target,
+        connections: current.connections.map((c) => ({
+          ...c,
+          status: "unknown",
+          error: "Update not confirmed. Check your connection, then retry.",
+        })),
+      }));
+      getState()
+        .then(setState)
+        .catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -174,14 +127,9 @@ export default function App() {
     setBusy(true);
     setNotice("");
     try {
-      if (preview)
-        setDemoConnections((cs) =>
-          cs.map((c) => ({ ...c, message: messages[c.provider].trim() })),
-        );
-      else
-        setState(
-          await request<AppState>("messages", state.csrfToken, { messages }),
-        );
+      setState(
+        await request<AppState>("messages", state.csrfToken, { messages }),
+      );
       setModal(null);
       setNotice(
         "Messages saved. They’ll be used the next time you switch away.",
@@ -193,13 +141,13 @@ export default function App() {
     }
   }
 
-  async function disconnect(provider: Provider) {
+  async function disconnect(connection: Connection) {
     setBusy(true);
     setNotice("");
     try {
       setState(
         await request<AppState>(
-          `connections/${provider}`,
+          `connections/${encodeURIComponent(connection.id)}`,
           state.csrfToken,
           {},
           "DELETE",
@@ -212,7 +160,7 @@ export default function App() {
       setState((current) => ({
         ...current,
         connections: current.connections.map((c) =>
-          c.provider === provider
+          c.id === connection.id
             ? {
                 ...c,
                 status: "unknown",
@@ -270,16 +218,10 @@ export default function App() {
         <button
           className="text-button"
           onClick={() =>
-            state.authenticated || preview
-              ? openSettings()
-              : setModal("connect")
+            state.authenticated ? openSettings() : setModal("connect")
           }
         >
-          {state.authenticated
-            ? "Account & settings"
-            : preview
-              ? "Settings"
-              : "Sign in"}
+          {state.authenticated ? "Account & settings" : "Sign in"}
         </button>
       </header>
       <main>
@@ -288,23 +230,6 @@ export default function App() {
           Slack and GitHub with one button.
         </p>
 
-        {preview && (
-          <div className="preview-banner">
-            <p>
-              <strong>Preview.</strong> No real accounts or statuses will
-              change.
-            </p>
-            <button
-              className="text-button"
-              onClick={() => {
-                setPreview(false);
-                setNotice("");
-              }}
-            >
-              Exit preview
-            </button>
-          </div>
-        )}
         {notice && (
           <div className="notice" role="status">
             <span>{notice}</span>
@@ -324,7 +249,7 @@ export default function App() {
               {connections.length && !synced
                 ? failed
                   ? "Some apps need attention."
-                  : "Ready to update your apps."
+                  : "Ready to update your accounts."
                 : away
                   ? "You’re away."
                   : connections.length
@@ -358,9 +283,8 @@ export default function App() {
           {connections.length > 0 && (
             <div className="sync-result" aria-live="polite">
               <span>
-                {succeeded} of {connections.length} apps{" "}
-                {away ? "set to away" : "cleared"}
-                {preview ? " (preview)" : ""}.
+                {succeeded} of {connections.length} accounts{" "}
+                {away ? "set to away" : "cleared"}.
               </span>
               {!synced && (
                 <button
@@ -374,9 +298,6 @@ export default function App() {
               )}
             </div>
           )}
-          <p className="small">
-            “I’m back” clears your away statuses. No timers or schedules.
-          </p>
         </section>
 
         <section className="apps-section" aria-labelledby="apps-heading">
@@ -387,77 +308,80 @@ export default function App() {
             </button>
           </div>
           <div className="app-list">
-            {(["slack", "github"] as Provider[]).map((provider) => {
-              const c = connections.find((item) => item.provider === provider);
-              return (
-                <article className="app-row" key={provider}>
-                  <div className="app-row-heading">
-                    <span className="app-icon">
-                      <AppIcon app={provider} />
-                    </span>
-                    <div className="app-name">
-                      <h3>{names[provider]}</h3>
-                      <p>{c ? c.label : "Not connected"}</p>
-                    </div>
-                    {c ? (
-                      <span
-                        className={`connection-label ${c.error ? "error-text" : ""}`}
-                      >
-                        {c.error
-                          ? "Needs attention"
-                          : preview
-                            ? "Preview"
-                            : "Connected"}
-                      </span>
-                    ) : (
-                      <button
-                        className="text-button"
-                        onClick={() => setModal("connect")}
-                      >
-                        Connect
-                        <span className="sr-only"> {names[provider]}</span>
-                      </button>
-                    )}
+            {connections.map((c) => (
+              <article className="app-row" key={c.id}>
+                <div className="app-row-heading">
+                  <span className="app-icon">
+                    <AppIcon app={c.provider} />
+                  </span>
+                  <div className="app-name">
+                    <h3>{names[c.provider]}</h3>
+                    <p>{c.label}</p>
                   </div>
-                  {c && (
-                    <div className="app-details">
-                      <p className="current-status">
-                        {c.status === "away" ? (
-                          <>🌴 {c.appliedMessage}</>
-                        ) : c.status === "unknown" ? (
-                          c.error ? (
-                            "Status not confirmed."
-                          ) : (
-                            "No update made yet."
-                          )
-                        ) : (
-                          "Away status cleared."
-                        )}
-                      </p>
-                      {c.error && (
-                        <div className="connection-error">
-                          <p>{c.error}</p>
-                          {c.needsReconnect ? (
-                            <a href={`/auth/${provider}`}>
-                              Reconnect {names[provider]}{" "}
-                              <ExternalLink size={13} />
-                            </a>
-                          ) : (
-                            <button
-                              className="text-button"
-                              disabled={busy}
-                              onClick={() => update(desired)}
-                            >
-                              Try again
-                            </button>
-                          )}
-                        </div>
+                  <span
+                    className={`connection-label ${c.error ? "error-text" : ""}`}
+                  >
+                    {c.error ? "Needs attention" : "Connected"}
+                  </span>
+                </div>
+                <div className="app-details">
+                  <p className="current-status">
+                    {c.status === "away" ? (
+                      <>🌴 {c.appliedMessage}</>
+                    ) : c.status === "unknown" ? (
+                      c.error ? (
+                        "Status not confirmed."
+                      ) : (
+                        "No update made yet."
+                      )
+                    ) : (
+                      "Away status cleared."
+                    )}
+                  </p>
+                  {c.error && (
+                    <div className="connection-error">
+                      <p>{c.error}</p>
+                      {c.needsReconnect ? (
+                        <a
+                          href={`/auth/${c.provider}?connection=${encodeURIComponent(c.id)}`}
+                        >
+                          Reconnect {c.label} <ExternalLink size={13} />
+                        </a>
+                      ) : (
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() => update(desired)}
+                        >
+                          Retry updates
+                        </button>
                       )}
                     </div>
                   )}
-                </article>
-              );
-            })}
+                </div>
+              </article>
+            ))}
+            {(["slack", "github"] as Provider[]).map((provider) => (
+              <div className="add-account" key={provider}>
+                <AppIcon app={provider} />
+                <a
+                  href={
+                    state.providers[provider] && !busy
+                      ? `/auth/${provider}`
+                      : undefined
+                  }
+                  aria-disabled={!state.providers[provider] || busy}
+                >
+                  {connections.some((c) => c.provider === provider)
+                    ? "Add another"
+                    : "Connect"}{" "}
+                  {names[provider]} account
+                </a>
+                {!loading && !state.providers[provider] && (
+                  <span className="small">Not available yet</span>
+                )}
+              </div>
+            ))}
           </div>
           <p className="small coming-next">
             Gmail and Google Calendar are next.
@@ -467,7 +391,7 @@ export default function App() {
         <section className="explanation" aria-labelledby="how-heading">
           <h2 id="how-heading">How it works</h2>
           <p>
-            Connect your apps and choose an away message for each. Press{" "}
+            Connect your accounts and choose an away message for each. Press{" "}
             <strong>I’m away</strong> when you’re unavailable, then{" "}
             <strong>I’m back</strong> when you return.
           </p>
@@ -475,20 +399,8 @@ export default function App() {
             This updates your profile statuses. It doesn’t mute notifications or
             change your working hours.
           </p>
-          {!state.authenticated && !preview && (
-            <button
-              className="text-button"
-              onClick={() => {
-                setPreview(true);
-                setNotice("");
-              }}
-            >
-              Try it without connecting an account
-            </button>
-          )}
         </section>
       </main>
-      <footer>A small tool for being clear about your availability.</footer>
       <dialog
         ref={dialog}
         onCancel={() => setModal(null)}
@@ -509,8 +421,8 @@ export default function App() {
             <>
               <h2 id="dialog-title">Connect an app</h2>
               <p>
-                Sign in with an app to connect it. Add the other whenever you’re
-                ready.
+                Sign in with an app to connect an account. You can add more
+                accounts afterwards.
               </p>
               {connectionButtons}
               <div className="privacy-note">
@@ -520,15 +432,6 @@ export default function App() {
                   stay yours.
                 </span>
               </div>
-              <button
-                className="preview-link"
-                onClick={() => {
-                  setPreview(true);
-                  setModal(null);
-                }}
-              >
-                Try it without connecting
-              </button>
             </>
           )}
           {modal === "settings" && (
@@ -536,54 +439,34 @@ export default function App() {
               <h2 id="dialog-title">Away messages</h2>
               <p>Choose the message each app shows when you’re away.</p>
               <form onSubmit={saveMessages}>
-                {(["slack", "github"] as Provider[]).map((provider) => (
-                  <label className="message-field" key={provider}>
+                {connections.map((c) => (
+                  <label className="message-field" key={c.id}>
                     <span>
-                      <AppIcon app={provider} />
-                      {names[provider]}{" "}
+                      <AppIcon app={c.provider} />
+                      {names[c.provider]}
                       <small>
-                        {messages[provider].length}/
-                        {provider === "github" ? 80 : 100}
+                        {(messages[c.id] || "").length}/
+                        {c.provider === "github" ? 80 : 100}
                       </small>
                     </span>
+                    <span className="message-account">{c.label}</span>
                     <div className="input-wrap">
                       <span>🌴</span>
                       <input
-                        disabled={
-                          !connections.some((c) => c.provider === provider)
-                        }
-                        value={messages[provider]}
+                        value={messages[c.id] || ""}
                         onChange={(e) =>
-                          setMessages({
-                            ...messages,
-                            [provider]: e.target.value,
-                          })
+                          setMessages({ ...messages, [c.id]: e.target.value })
                         }
-                        maxLength={provider === "github" ? 80 : 100}
+                        maxLength={c.provider === "github" ? 80 : 100}
                         required
-                        aria-label={`${names[provider]} away message`}
+                        aria-label={`${names[c.provider]} ${c.label} away message`}
                       />
                     </div>
-                    {!connections.some((c) => c.provider === provider) && (
-                      <a
-                        className="field-hint"
-                        href={
-                          state.providers[provider]
-                            ? `/auth/${provider}`
-                            : undefined
-                        }
-                        onClick={(e) => {
-                          if (!state.providers[provider]) {
-                            e.preventDefault();
-                            setModal("connect");
-                          }
-                        }}
-                      >
-                        Connect {names[provider]} to edit its message
-                      </a>
-                    )}
                   </label>
                 ))}
+                {!connections.length && (
+                  <p>Connect an account to choose its away message.</p>
+                )}
                 <div className="settings-note">
                   Changes apply the next time you switch away.
                 </div>
@@ -599,18 +482,17 @@ export default function App() {
                   Save messages
                 </button>
               </form>
-              {state.authenticated && !preview && (
+              {state.authenticated && (
                 <div className="manage-connections">
                   <h3>Manage connections</h3>
                   {connections.map((c) => (
-                    <div key={c.provider}>
-                      <span>{names[c.provider]}</span>
-                      {disconnecting === c.provider ? (
+                    <div key={c.id}>
+                      <span>
+                        {names[c.provider]} · {c.label}
+                      </span>
+                      {disconnecting === c.id ? (
                         <span className="disconnect-confirm">
-                          <button
-                            disabled={busy}
-                            onClick={() => disconnect(c.provider)}
-                          >
+                          <button disabled={busy} onClick={() => disconnect(c)}>
                             Clear status & disconnect
                           </button>
                           <button onClick={() => setDisconnecting(null)}>
@@ -620,7 +502,7 @@ export default function App() {
                       ) : (
                         <button
                           disabled={busy}
-                          onClick={() => setDisconnecting(c.provider)}
+                          onClick={() => setDisconnecting(c.id)}
                         >
                           <Unplug size={13} /> Disconnect
                         </button>
@@ -629,7 +511,7 @@ export default function App() {
                   ))}
                   <p>
                     Disconnecting clears your status first. Removing your last
-                    app also removes your account here.
+                    connected account also removes your account here.
                   </p>
                   <button className="logout" onClick={logout} disabled={busy}>
                     <LogOut size={14} /> Sign out

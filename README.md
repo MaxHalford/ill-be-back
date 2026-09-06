@@ -3,7 +3,7 @@
 [Open the app](https://ill-be-back-production.up.railway.app)
 
 One switch to announce your absence across GitHub and Slack. Press **I’m away**
-to set your saved per-app messages; press **I’m back** to clear them. No scheduling,
+to set your saved per-account messages; press **I’m back** to clear them. No scheduling,
 return dates, or notification changes. Gmail and Google Calendar are the next milestone.
 
 Go backend (`net/http`, `database/sql`), React + TypeScript frontend, SQLite locally,
@@ -21,9 +21,8 @@ cd ..
 go run ./cmd/server -dev
 ```
 
-Open http://localhost:8000. The labeled **Take a test drive** preview works without
-provider credentials and never updates real accounts. Development mode generates a
-local encryption key in `data/token.key` and uses `data/app.db`; keep them together.
+Open http://localhost:8000. Connect an account using configured OAuth credentials.
+Development mode generates a local encryption key in `data/token.key` and uses `data/app.db`; keep them together.
 
 For frontend hot reload, run `npm run dev` in `frontend/` while the Go server runs.
 Vite proxies `/api` and `/auth` to port 8000. OAuth returns to `APP_URL` (the Go server).
@@ -42,10 +41,14 @@ Use separate local OAuth apps with callbacks on `http://localhost:8000`.
 
 ## OAuth setup
 
-Connecting the first provider also signs the user in. Connecting the other provider
-while signed in links it to the same account. An external identity can belong to only
-one account; accounts are never merged by email. Reconnect the same identity to renew
-authorization. To switch identities, disconnect the existing connection first.
+Connecting the first account also signs the user in. While signed in, use **Add another**
+to connect more accounts from the same provider or a different provider. Each connection
+has its own message and update result; the main switch updates all of them. Slack identities
+include both workspace and user, so multiple users in one workspace are supported.
+Any connected identity can sign back into the same account. An external identity belongs
+to only one account; accounts are never merged by email. Authorizing the same identity
+again refreshes its token without creating a duplicate. Targeted reconnection rejects
+a different identity. Disconnecting one connection leaves the others intact.
 
 ### GitHub
 
@@ -104,7 +107,7 @@ with a writable persistent volume, but PostgreSQL is recommended for Railway.
 - Sessions are opaque random cookies, hashed in the database; cookies are HTTP-only,
   SameSite=Lax and secure in production. Mutations require a session-bound CSRF token
   and reject cross-origin requests.
-- Each provider result is persisted separately. Unknown or failed results never count
+- Each connected account’s result is persisted separately. Unknown or failed results never count
   as synchronized. Successful updates remain when another integration fails.
 - Account-level database leases serialize mutations across tabs and server instances.
   Accepted switches finish within a bounded timeout even if the browser disconnects.
@@ -134,3 +137,8 @@ failure/reconnection, malformed provider replies, concurrent switches, and disco
 
 The confirmed scope is in [`docs/spec.md`](docs/spec.md). The interface uses a simple
 white page, blue accents, and system fonts, inspired by https://playaphone.com/.
+
+Database upgrades run transactionally at startup and preserve existing connections,
+sessions, encrypted tokens, and messages. Tests cover upgrading the original schema and
+restarting. Set `TEST_POSTGRES_URL` to an **empty disposable database** to also run that
+upgrade test against PostgreSQL.

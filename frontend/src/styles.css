@@ -255,27 +255,6 @@ a:hover {
 .explanation > .text-button {
   margin-top: 15px;
 }
-footer {
-  border-top: 1px solid #ddd;
-  padding-top: 17px;
-  margin-top: 32px;
-  font-size: 13px;
-  color: #6b6b6b;
-}
-.preview-banner {
-  background: #edf4fa;
-  border-left: 3px solid #316daa;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 13px;
-  margin-bottom: 18px;
-  font-size: 14px;
-}
-.preview-banner .text-button {
-  flex-shrink: 0;
-}
 .notice {
   display: flex;
   gap: 12px;
@@ -361,16 +340,6 @@ dialog::backdrop {
   align-items: flex-start;
   font-size: 13px;
   color: #626262;
-}
-.preview-link {
-  color: #245d93;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  margin-top: 19px;
-  border: 0;
-  padding: 0;
-  background: none;
-  font-size: 14px;
 }
 .message-field {
   display: block;
@@ -534,12 +503,6 @@ dialog::backdrop {
     max-width: 140px;
     text-align: right;
   }
-  .preview-banner {
-    align-items: flex-start;
-  }
-  .preview-banner .text-button {
-    font-size: 13px;
-  }
   .modal {
     padding: 25px 20px;
   }
@@ -548,4 +511,35 @@ dialog::backdrop {
   .spin {
     animation: none;
   }
+}
+
+.add-account {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 15px;
+}
+.add-account > svg {
+  width: 22px;
+  height: 22px;
+}
+.add-account a[aria-disabled="true"] {
+  color: #777;
+  text-decoration: none;
+}
+.message-field > .message-account {
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  color: #626262;
+}
+.manage-connections > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.manage-connections > div > button {
+  flex-shrink: 0;
 }

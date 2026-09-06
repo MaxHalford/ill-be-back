@@ -22,6 +22,10 @@ import (
 type providerStub struct {
 	mu             sync.Mutex
 	githubID       int
+	slackTeam      string
+	slackUser      string
+	slackFailures  map[string]string
+	slackTokens    []string
 	githubStatus   string
 	slackStatus    string
 	githubRequests []map[string]any
@@ -40,9 +44,9 @@ func (p *providerStub) RoundTrip(r *http.Request) (*http.Response, error) {
 	case "api.github.com/user":
 		response = fmt.Sprintf(`{"id":%d,"login":"worker%d","name":"Test Worker"}`, p.githubID, p.githubID)
 	case "slack.com/api/oauth.v2.access":
-		response = `{"ok":true,"authed_user":{"id":"U1","access_token":"test-slack-secret","scope":"users.profile:write"}}`
+		response = fmt.Sprintf(`{"ok":true,"authed_user":{"id":%q,"access_token":%q,"scope":"users.profile:write"}}`, p.slackUser, "test-slack-"+p.slackTeam+":"+p.slackUser)
 	case "slack.com/api/auth.test":
-		response = `{"ok":true,"user_id":"U1","team_id":"T1","user":"worker","team":"Test workspace"}`
+		response = fmt.Sprintf(`{"ok":true,"user_id":%q,"team_id":%q,"user":%q,"team":%q}`, p.slackUser, p.slackTeam, p.slackUser, "Workspace "+p.slackTeam)
 	case "api.github.com/graphql":
 		if p.started != nil {
 			close(p.started)
@@ -70,7 +74,11 @@ func (p *providerStub) RoundTrip(r *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 		p.slackRequests = append(p.slackRequests, input)
+		p.slackTokens = append(p.slackTokens, r.Header.Get("Authorization"))
 		response = p.slackStatus
+		if failure := p.slackFailures[r.Header.Get("Authorization")]; failure != "" {
+			response = failure
+		}
 		if response == "" {
 			data, _ := json.Marshal(map[string]any{"ok": true, "profile": input["profile"]})
 			response = string(data)
@@ -95,7 +103,7 @@ type state struct {
 
 func setup(t *testing.T) *testApp {
 	t.Helper()
-	p := &providerStub{githubID: 1}
+	p := &providerStub{githubID: 1, slackTeam: "T1", slackUser: "U1"}
 	a, err := app.New(app.Config{DatabaseURL: filepath.Join(t.TempDir(), "app.db"), EncryptionKey: bytes.Repeat([]byte{7}, 32), AppURL: "http://localhost:8000", Development: true,
 		GitHubClientID: "github-id", GitHubClientSecret: "github-secret", SlackClientID: "slack-id", SlackClientSecret: "slack-secret", HTTPClient: &http.Client{Transport: p}})
 	if err != nil {
@@ -448,5 +456,159 @@ func TestFailedDisconnectPersistsUncertaintyAndReconnect(t *testing.T) {
 		if c.Provider == "github" && c.Status != "away" {
 			t.Fatal("failed Slack disconnect changed GitHub")
 		}
+	}
+}
+
+func TestMultipleSlackAccountsAndReauthentication(t *testing.T) {
+	a := setup(t)
+	a.connect(t, "slack")
+	a.provider.slackTeam = "T2"
+	a.connect(t, "slack")
+	a.provider.slackUser = "U2"
+	a.connect(t, "slack")
+	s := a.state(t)
+	if len(s.Connections) != 3 {
+		t.Fatalf("expected three separate Slack accounts: %+v", s.Connections)
+	}
+	// Authorizing an existing identity again refreshes its connection, rather than adding a duplicate.
+	a.connect(t, "slack")
+	if len(a.state(t).Connections) != 3 {
+		t.Fatal("reconnection duplicated an account")
+	}
+	s = a.state(t)
+	a.call(t, "POST", "/api/logout", s.CSRFToken, map[string]any{})
+	a.provider.slackTeam, a.provider.slackUser = "T1", "U1"
+	a.connect(t, "slack")
+	if len(a.state(t).Connections) != 3 {
+		t.Fatal("signing in with an earlier connection lost the other accounts")
+	}
+}
+
+func TestMultipleAccountsHaveIndependentMessagesResultsAndDisconnect(t *testing.T) {
+	a := setup(t)
+	a.connect(t, "slack")
+	first := a.state(t).Connections[0].ID
+	a.provider.slackTeam = "T2"
+	a.connect(t, "slack")
+	s := a.state(t)
+	second := ""
+	for _, c := range s.Connections {
+		if c.ID != first {
+			second = c.ID
+		}
+	}
+	if first == "" || second == "" {
+		t.Fatal("connections need distinct IDs")
+	}
+	code, data := a.call(t, "POST", "/api/messages", s.CSRFToken, map[string]any{"messages": map[string]string{first: "On holiday", second: "Friday off"}})
+	if code != 200 {
+		t.Fatalf("save independent messages: %d %s", code, data)
+	}
+	a.provider.slackFailures = map[string]string{"Bearer test-slack-T2:U1": `{"ok":false,"error":"invalid_auth"}`}
+	code, data = a.call(t, "POST", "/api/status", s.CSRFToken, map[string]string{"status": "away"})
+	if code != 200 {
+		t.Fatalf("away: %d %s", code, data)
+	}
+	for _, c := range readState(t, data).Connections {
+		if c.ID == first && (c.Status != "away" || c.AppliedMessage != "On holiday" || c.Error != "") {
+			t.Fatalf("first account success lost: %+v", c)
+		}
+		if c.ID == second && (c.Status != "unknown" || !c.NeedsReconnect || c.Message != "Friday off") {
+			t.Fatalf("second account failure hidden: %+v", c)
+		}
+	}
+	for i, token := range a.provider.slackTokens {
+		want := "On holiday"
+		if token == "Bearer test-slack-T2:U1" {
+			want = "Friday off"
+		}
+		if a.provider.slackRequests[i]["profile"].(map[string]any)["status_text"] != want {
+			t.Fatal("message sent to the wrong Slack account")
+		}
+	}
+	// Old browser tabs must not accidentally edit or disconnect all Slack accounts.
+	if code, _ = a.call(t, "POST", "/api/messages", s.CSRFToken, map[string]any{"messages": map[string]string{"slack": "ambiguous"}}); code != 409 {
+		t.Fatalf("ambiguous edit accepted: %d", code)
+	}
+	if code, _ = a.call(t, "DELETE", "/api/connections/slack", s.CSRFToken, nil); code != 409 {
+		t.Fatalf("ambiguous disconnect accepted: %d", code)
+	}
+	a.provider.slackFailures = nil
+	a.connect(t, "slack")
+	s = a.state(t)
+	a.call(t, "POST", "/api/status", s.CSRFToken, map[string]string{"status": "away"})
+	code, data = a.call(t, "DELETE", "/api/connections/"+url.PathEscape(first), s.CSRFToken, nil)
+	if code != 200 {
+		t.Fatalf("disconnect: %d %s", code, data)
+	}
+	remaining := readState(t, data)
+	if !remaining.Authenticated || len(remaining.Connections) != 1 || remaining.Connections[0].ID != second || remaining.Connections[0].Status != "away" || remaining.Connections[0].AppliedMessage != "Friday off" {
+		t.Fatalf("disconnect affected sibling account: %s", data)
+	}
+	last := len(a.provider.slackRequests) - 1
+	if a.provider.slackTokens[last] != "Bearer test-slack-T1:U1" || a.provider.slackRequests[last]["profile"].(map[string]any)["status_text"] != "" {
+		t.Fatal("disconnect cleared wrong account")
+	}
+	code, data = a.call(t, "POST", "/api/status", s.CSRFToken, map[string]string{"status": "available"})
+	if code != 200 || readState(t, data).Connections[0].Status != "available" {
+		t.Fatalf("back failed: %d %s", code, data)
+	}
+}
+
+func TestReconnectMustMatchSelectedAccountAndRejectOtherOwners(t *testing.T) {
+	a := setup(t)
+	a.connect(t, "slack")
+	original := a.state(t).Connections[0].ID
+	a.provider.slackTeam = "T2"
+	a.connect(t, "slack")
+	reconnect := func(id, want string) {
+		t.Helper()
+		r, err := a.client.Get(a.server.URL + "/auth/slack?connection=" + url.QueryEscape(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		location, _ := url.Parse(r.Header.Get("Location"))
+		if want == "start-rejected" {
+			if r.StatusCode != 404 {
+				t.Fatalf("foreign reconnect accepted: %d", r.StatusCode)
+			}
+			return
+		}
+		if location.Query().Get("state") == "" {
+			t.Fatal("missing OAuth state")
+		}
+		r, err = a.client.Get(a.server.URL + "/auth/slack/callback?code=test-code&state=" + url.QueryEscape(location.Query().Get("state")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		if r.Header.Get("Location") != want {
+			t.Fatalf("reconnect result: %s, want %s", r.Header.Get("Location"), want)
+		}
+	}
+	reconnect(original, "/?error=wrong_account")
+	a.provider.slackTeam = "T1"
+	reconnect(original, "/")
+	s := a.state(t)
+	if len(s.Connections) != 2 {
+		t.Fatal("reconnection changed account count")
+	}
+	firstClient := a.client
+	jar, _ := cookiejar.New(nil)
+	a.client = &http.Client{Jar: jar, CheckRedirect: firstClient.CheckRedirect}
+	a.provider.githubID = 99
+	a.connect(t, "github")
+	second := a.state(t)
+	reconnect(original, "start-rejected")
+	if code, _ := a.call(t, "DELETE", "/api/connections/"+url.PathEscape(original), second.CSRFToken, nil); code != 404 {
+		t.Fatalf("foreign disconnect accepted: %d", code)
+	}
+	if code, _ := a.call(t, "POST", "/api/messages", second.CSRFToken, map[string]any{"messages": map[string]string{original: "stolen"}}); code != 404 {
+		t.Fatalf("foreign message edit accepted: %d", code)
+	}
+	a.client = firstClient
+	if len(a.state(t).Connections) != 2 {
+		t.Fatal("other owner changed connections")
 	}
 }

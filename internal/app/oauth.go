@@ -29,8 +29,21 @@ func (a *Server) oauthStart(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	target := r.URL.Query().Get("connection")
+	if target != "" {
+		var found string
+		err = a.store.db.QueryRowContext(r.Context(), `SELECT id FROM connections WHERE account_id=$1 AND provider=$2 AND id=$3`, s.account, p, target).Scan(&found)
+		if errors.Is(err, sql.ErrNoRows) {
+			problem(w, 404, "This account isn’t connected.")
+			return
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
 	state, verifier := randomToken(), randomToken()+randomToken()
-	_, err = a.store.db.ExecContext(r.Context(), `UPDATE sessions SET oauth_state=$1,oauth_provider=$2,oauth_verifier=$3,oauth_expires=$4 WHERE id=$5`, digest(state), p, verifier, time.Now().Add(10*time.Minute).Unix(), s.id)
+	_, err = a.store.db.ExecContext(r.Context(), `UPDATE sessions SET oauth_state=$1,oauth_provider=$2,oauth_verifier=$3,oauth_expires=$4,oauth_connection=$5 WHERE id=$6`, digest(state), p, verifier, time.Now().Add(10*time.Minute).Unix(), target, s.id)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -41,6 +54,7 @@ func (a *Server) oauthStart(w http.ResponseWriter, r *http.Request) {
 		endpoint = "https://github.com/login/oauth/authorize"
 		params.Set("client_id", a.cfg.GitHubClientID)
 		params.Set("scope", "user")
+		params.Set("prompt", "select_account")
 		challenge := sha256.Sum256([]byte(verifier))
 		params.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
 		params.Set("code_challenge_method", "S256")
@@ -64,9 +78,9 @@ func (a *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 35*time.Second)
 	defer cancel()
-	var verifier string
+	var verifier, target string
 	// Consuming the pending state atomically makes callbacks single-use.
-	err = a.store.db.QueryRowContext(ctx, `UPDATE sessions SET oauth_state='' WHERE id=$1 AND oauth_state=$2 AND oauth_provider=$3 AND oauth_expires>$4 RETURNING oauth_verifier`, s.id, digest(r.URL.Query().Get("state")), p, time.Now().Unix()).Scan(&verifier)
+	err = a.store.db.QueryRowContext(ctx, `UPDATE sessions SET oauth_state='' WHERE id=$1 AND oauth_state=$2 AND oauth_provider=$3 AND oauth_expires>$4 RETURNING oauth_verifier,oauth_connection`, s.id, digest(r.URL.Query().Get("state")), p, time.Now().Unix()).Scan(&verifier, &target)
 	if err != nil {
 		a.oauthError(w, r, "state")
 		return
@@ -92,6 +106,18 @@ func (a *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer unlock()
+	}
+	if target != "" {
+		var remote string
+		err = a.store.db.QueryRowContext(ctx, `SELECT remote_id FROM connections WHERE account_id=$1 AND provider=$2 AND id=$3`, s.account, p, target).Scan(&remote)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && remote != id.remoteID) {
+			a.oauthError(w, r, "wrong_account")
+			return
+		}
+		if err != nil {
+			a.oauthError(w, r, "oauth")
+			return
+		}
 	}
 	newSession, raw, err := a.linkIdentity(ctx, s, p, id)
 	if err != nil {
@@ -133,18 +159,17 @@ func (a *Server) linkIdentity(ctx context.Context, s session, provider string, i
 			return session{}, "", err
 		}
 	}
-	var previous string
-	err = tx.QueryRowContext(ctx, `SELECT remote_id FROM connections WHERE account_id=$1 AND provider=$2`, account, provider).Scan(&previous)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return session{}, "", err
-	}
-	if previous != "" && previous != id.remoteID {
-		return session{}, "", errLinked
-	}
 	encrypted := a.store.encrypt(id.token, provider+":"+id.remoteID)
-	_, err = tx.ExecContext(ctx, `INSERT INTO connections(account_id,provider,remote_id,label,token) VALUES($1,$2,$3,$4,$5) ON CONFLICT(account_id,provider) DO UPDATE SET token=excluded.token,label=excluded.label,reconnect=0,error=''`, account, provider, id.remoteID, id.label, encrypted)
+	inserted, err := tx.ExecContext(ctx, `INSERT INTO connections(id,account_id,provider,remote_id,label,token) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(provider,remote_id) DO UPDATE SET token=excluded.token,label=excluded.label,reconnect=0,error='' WHERE connections.account_id=excluded.account_id`, randomToken(), account, provider, id.remoteID, id.label, encrypted)
 	if err != nil {
 		return session{}, "", err
+	}
+	count, err := inserted.RowsAffected()
+	if err != nil {
+		return session{}, "", err
+	}
+	if count != 1 {
+		return session{}, "", errLinked
 	}
 	raw := randomToken()
 	result := session{id: digest(raw), account: account, csrf: randomToken()}

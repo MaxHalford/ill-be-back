@@ -56,7 +56,7 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("POST /api/status", a.changeStatus)
 	mux.HandleFunc("POST /api/messages", a.messages)
 	mux.HandleFunc("POST /api/logout", a.logout)
-	mux.HandleFunc("DELETE /api/connections/{provider}", a.disconnect)
+	mux.HandleFunc("DELETE /api/connections/{connection}", a.disconnect)
 	mux.HandleFunc("GET /auth/{provider}", a.oauthStart)
 	mux.HandleFunc("GET /auth/{provider}/callback", a.oauthCallback)
 	mux.HandleFunc("GET /", a.frontend)
@@ -221,7 +221,7 @@ func (a *Server) frontend(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(a.cfg.StaticDir, "index.html"))
 		return
 	}
-	if !strings.HasPrefix(r.URL.Path, "/assets/") && !strings.HasPrefix(r.URL.Path, "/art/") {
+	if r.URL.Path != "/favicon.svg" && !strings.HasPrefix(r.URL.Path, "/assets/") && !strings.HasPrefix(r.URL.Path, "/art/") {
 		http.NotFound(w, r)
 		return
 	}
