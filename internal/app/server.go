@@ -21,6 +21,8 @@ type Config struct {
 	EncryptionKey                      []byte
 	GitHubClientID, GitHubClientSecret string
 	SlackClientID, SlackClientSecret   string
+	GoogleClientID, GoogleClientSecret string
+	GoogleVerified                     bool
 	HTTPClient                         *http.Client
 	Development                        bool
 }
@@ -57,6 +59,9 @@ func New(cfg Config) (*Server, error) {
 	mux.HandleFunc("POST /api/messages", a.messages)
 	mux.HandleFunc("POST /api/logout", a.logout)
 	mux.HandleFunc("DELETE /api/connections/{connection}", a.disconnect)
+	mux.HandleFunc("DELETE /api/account", a.deleteAccount)
+	mux.HandleFunc("GET /privacy", a.policy)
+	mux.HandleFunc("GET /terms", a.policy)
 	mux.HandleFunc("GET /auth/{provider}", a.oauthStart)
 	mux.HandleFunc("GET /auth/{provider}/callback", a.oauthCallback)
 	mux.HandleFunc("GET /", a.frontend)
@@ -110,7 +115,7 @@ func internalError(w http.ResponseWriter, err error) {
 	problem(w, 500, "We couldn’t save that change. Please try again.")
 }
 func decode(w http.ResponseWriter, r *http.Request, target any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	r.Body = http.MaxBytesReader(w, r.Body, 65536)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(target); err != nil {
@@ -176,15 +181,18 @@ type appState struct {
 	Authenticated bool            `json:"authenticated"`
 	Name          string          `json:"name"`
 	DesiredStatus string          `json:"desiredStatus"`
+	ReturnAt      string          `json:"returnAt"`
 	Connections   []Connection    `json:"connections"`
 	Providers     map[string]bool `json:"providers"`
 	CSRFToken     string          `json:"csrfToken"`
+	GoogleTesting bool            `json:"googleTesting"`
 }
 
 func (a *Server) respondState(w http.ResponseWriter, r *http.Request, s session) {
-	result := appState{Authenticated: s.account != "", DesiredStatus: "available", Connections: []Connection{}, CSRFToken: s.csrf, Providers: map[string]bool{"github": a.enabled("github"), "slack": a.enabled("slack")}}
+	result := appState{Authenticated: s.account != "", DesiredStatus: "available", Connections: []Connection{}, CSRFToken: s.csrf, Providers: map[string]bool{"github": a.enabled("github"), "slack": a.enabled("slack"), "gmail": a.enabled("gmail"), "calendar": a.enabled("calendar")}}
+	result.GoogleTesting = a.enabled("gmail") && !a.cfg.GoogleVerified
 	if s.account != "" {
-		err := a.store.db.QueryRowContext(r.Context(), `SELECT name,desired_status FROM accounts WHERE id=$1`, s.account).Scan(&result.Name, &result.DesiredStatus)
+		err := a.store.db.QueryRowContext(r.Context(), `SELECT name,desired_status,return_at FROM accounts WHERE id=$1`, s.account).Scan(&result.Name, &result.DesiredStatus, &result.ReturnAt)
 		if err != nil {
 			internalError(w, err)
 			return
@@ -193,6 +201,15 @@ func (a *Server) respondState(w http.ResponseWriter, r *http.Request, s session)
 		if err != nil {
 			internalError(w, err)
 			return
+		}
+		for i, c := range result.Connections {
+			if c.Provider == "calendar" && c.Status == "away" {
+				end, err := time.Parse(time.RFC3339, c.AwayUntil)
+				if err != nil || !end.After(time.Now()) {
+					result.Connections[i].Status = "unknown"
+					result.Connections[i].Error = "Your Calendar absence ended. Choose a new return time or switch back."
+				}
+			}
 		}
 	}
 	jsonResponse(w, 200, result)

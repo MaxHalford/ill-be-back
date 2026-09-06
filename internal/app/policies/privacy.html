@@ -1,0 +1,23 @@
+{{define "privacy"}}
+<p>I’ll Be Back is operated by Max Halford. It lets you set and clear availability across connected apps. For privacy questions or requests, contact <a href="mailto:maxhalford25@gmail.com">maxhalford25@gmail.com</a>.</p>
+<h2>What we access and why</h2>
+<p>When you connect an app, we receive its account identifier and account label, such as your username, workspace or verified Google email address. We use these to sign you in, link the correct account and show your connections. We also receive an access or refresh credential so we can make the changes you request.</p>
+<ul>
+<li><strong>GitHub and Slack:</strong> we update your profile status using your saved away message and clear it when you return.</li>
+<li><strong>Gmail:</strong> we read your vacation responder settings to preserve your recipient restrictions. When you switch away, we replace the vacation reply subject and body with “Out of office” and your saved message, enable replies and remove any previous end date. When you return, we disable the responder. Gmail itself sends the replies. We do not access your email messages or contacts.</li>
+<li><strong>Google Calendar:</strong> we create a timed out-of-office event on your primary calendar, using your saved message and return time. We read and update the event created here to confirm changes, and delete it when you return. We do not list unrelated events, invite attendees or decline invitations.</li>
+</ul>
+<p>Google asks for permission to manage Gmail basic settings or events on calendars you own. Those permissions cover more than this app uses. We request each service only when you choose to connect it, alongside permission to identify your Google account.</p>
+<h2>What we store</h2>
+<p>We store account identifiers and labels, encrypted provider credentials, your saved and last applied away messages, update results, the return time and identifiers of Calendar events created here. We keep sign-in sessions in our database and an essential session cookie in your browser. Google access tokens are used temporarily; refresh credentials are encrypted in storage.</p>
+<p>The app and database are hosted on Railway. Hosting infrastructure processes data to operate the service and may retain technical logs and backups. Application errors are recorded for troubleshooting; we do not intentionally log provider credentials, email messages or event contents.</p>
+<h2>Sharing and use</h2>
+<p>We send your saved messages and requested changes to the providers you connect. Your statuses, vacation replies and Calendar absence are visible to others according to those providers’ settings. Railway processes stored data as our hosting provider. We do not sell your data, use it for advertising or use it to train AI models.</p>
+<p>Our handling of Google user data follows the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements. Google data is used only to provide these visible app features. Human access is limited to your explicit consent for support, necessary security investigations or legal requirements. We may disclose data when required by law.</p>
+<h2>Control, retention and deletion</h2>
+<p>We keep your account data while your account exists. In Account &amp; settings, disconnecting an app clears its status and removes its stored credential and connection. If clearing fails, the connection stays available for retry. Removing the last connection also deletes your account and sessions.</p>
+<p>You can instead choose <strong>Delete account and data</strong> at any time, including when provider access has expired. This removes your account, connections, credentials, messages and sessions from the active database. It leaves external statuses, Gmail replies and Calendar events in place: press I’m back before deleting, or clear them in each provider. Deletion from backup copies follows the hosting provider’s backup lifecycle; backups are not used to serve active accounts.</p>
+<p>You can revoke Google access in <a href="https://myaccount.google.com/connections">your Google account’s connections settings</a>. Revoking access stops further Google updates but does not itself delete data stored here. Contact us to request access to, correction of or deletion of your stored data, or if you can no longer sign in. We may need to verify that the account is yours.</p>
+<h2>Changes</h2>
+<p>We will update this page when our practices change. If a change introduces a new use of Google data, we will explain it and obtain consent before that use begins.</p>
+{{end}}

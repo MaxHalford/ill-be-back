@@ -2,9 +2,11 @@
 
 [Open the app](https://ill-be-back-production.up.railway.app)
 
-One switch to announce your absence across GitHub and Slack. Press **I’m away**
-to set your saved per-account messages; press **I’m back** to clear them. No scheduling,
-return dates, or notification changes. Gmail and Google Calendar are the next milestone.
+One switch to announce your absence across GitHub, Slack, Gmail and Google Calendar.
+Press **I’m away** to apply your saved per-account messages; press **I’m back** to clear
+them. Calendar asks for a return time and ends automatically; the other apps remain
+away until you return. No recurring schedules or notification controls.
+Google access is in testing pending public verification.
 
 Go backend (`net/http`, `database/sql`), React + TypeScript frontend, SQLite locally,
 PostgreSQL on Railway. The same Go binary serves the API and compiled frontend.
@@ -76,7 +78,23 @@ Only the user scope `users.profile:write` is requested. Slack’s own availabili
 DND, and notification preferences are unchanged. The status text and palm emoji have
 no expiry. Back clears both. The app uses the installing user’s token, never a bot token.
 
-## Railway
+### Google
+
+Configure an external web OAuth client with `APP_URL/auth/gmail/callback` and
+`APP_URL/auth/calendar/callback`. Enable Gmail API and Google Calendar API and set
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Keep `GOOGLE_VERIFIED=false` until
+Google approves the public app and production publishing is enabled. This flag only
+controls the UI disclosure; Google Cloud's audience configuration enforces test access.
+
+Gmail requests `gmail.settings.basic` for vacation replies. Calendar requests
+`calendar.events.owned` for native out-of-office events on the primary calendar;
+only supported work accounts can use these. Both also request `openid email`.
+Refresh credentials are encrypted; access tokens are renewed for each action.
+Gmail's existing recipient restrictions are preserved. Calendar does not decline
+invitations. See [the verification guide](docs/google-verification.md) for review
+requirements, scope justifications and the demonstration script.
+
+## Railway deployment
 
 The Dockerfile builds both applications and runs an unprivileged, static Go binary.
 `railway.json` configures the `/healthz` deployment check. No separate worker is needed.
@@ -118,6 +136,9 @@ with a writable persistent volume, but PostgreSQL is recommended for Railway.
 - Disconnect clears the provider status before removing its token. If clearing fails,
   the connection is retained for retry/reconnection. Removing the last connection also
   deletes the account and its sessions. Signing out alone leaves statuses unchanged.
+- **Delete account and data** removes local data even if provider access is revoked.
+  It explicitly leaves external statuses, vacation replies and Calendar events in
+  place. Users should clear them before deletion or directly in the providers.
 
 ## Checks
 

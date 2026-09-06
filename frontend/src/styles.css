@@ -12,7 +12,8 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button,
@@ -229,6 +230,7 @@ a:hover {
 }
 .current-status {
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .error-text,
 .connection-error {
@@ -370,7 +372,8 @@ dialog::backdrop {
   border-radius: 3px;
   padding: 0 10px;
 }
-.input-wrap input {
+.input-wrap input,
+.input-wrap textarea {
   min-width: 0;
   width: 100%;
   padding: 10px 0;
@@ -384,6 +387,40 @@ dialog::backdrop {
 }
 .input-wrap input:focus {
   outline: none;
+}
+.input-wrap textarea {
+  resize: vertical;
+}
+.input-wrap textarea:focus {
+  outline: none;
+}
+.message-field > input[type="datetime-local"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #aab6bf;
+  border-radius: 3px;
+  margin-top: 8px;
+}
+footer {
+  display: flex;
+  gap: 20px;
+  border-top: 1px solid #ddd;
+  margin-top: 32px;
+  padding-top: 18px;
+  font-size: 13px;
+}
+.delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+}
+.manage-connections .delete-account {
+  display: block;
+  margin-top: 18px;
+  color: #914a1f;
 }
 .input-wrap:has(input:disabled) {
   background: #f4f4f4;

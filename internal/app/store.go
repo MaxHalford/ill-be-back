@@ -19,17 +19,20 @@ import (
 )
 
 type Connection struct {
-	ID             string  `json:"id"`
-	Provider       string  `json:"provider"`
-	Label          string  `json:"label"`
-	Message        string  `json:"message"`
-	AppliedMessage string  `json:"appliedMessage"`
-	Status         string  `json:"status"`
-	Error          string  `json:"error"`
-	NeedsReconnect bool    `json:"needsReconnect"`
-	UpdatedAt      *string `json:"updatedAt"`
-	remoteID       string
-	token          string
+	ID              string  `json:"id"`
+	Provider        string  `json:"provider"`
+	Label           string  `json:"label"`
+	Message         string  `json:"message"`
+	AppliedMessage  string  `json:"appliedMessage"`
+	Status          string  `json:"status"`
+	Error           string  `json:"error"`
+	NeedsReconnect  bool    `json:"needsReconnect"`
+	UpdatedAt       *string `json:"updatedAt"`
+	AwayUntil       string  `json:"awayUntil,omitempty"`
+	calendarEventID string
+	calendarStart   string
+	remoteID        string
+	token           string
 }
 
 type store struct {
@@ -127,7 +130,7 @@ func (s *store) decrypt(token, identity string) (string, error) {
 }
 
 func (s *store) connections(ctx context.Context, account string) ([]Connection, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,provider,label,message,applied_message,status,error,reconnect,updated_at,remote_id,token FROM connections WHERE account_id=$1 ORDER BY provider,label,id`, account)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,provider,label,message,applied_message,status,error,reconnect,updated_at,remote_id,token,calendar_event_id,calendar_start,calendar_end FROM connections WHERE account_id=$1 ORDER BY provider,label,id`, account)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +139,7 @@ func (s *store) connections(ctx context.Context, account string) ([]Connection, 
 	for rows.Next() {
 		var c Connection
 		var reconnect int
-		if err := rows.Scan(&c.ID, &c.Provider, &c.Label, &c.Message, &c.AppliedMessage, &c.Status, &c.Error, &reconnect, &c.UpdatedAt, &c.remoteID, &c.token); err != nil {
+		if err := rows.Scan(&c.ID, &c.Provider, &c.Label, &c.Message, &c.AppliedMessage, &c.Status, &c.Error, &reconnect, &c.UpdatedAt, &c.remoteID, &c.token, &c.calendarEventID, &c.calendarStart, &c.AwayUntil); err != nil {
 			return nil, err
 		}
 		c.NeedsReconnect = reconnect != 0
@@ -225,6 +228,23 @@ func (s *store) migrateConnections(ctx context.Context, driver string) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES(3)`); err != nil {
 			return err
+		}
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version=4`).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE google_identities (remote_id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE)`,
+			`ALTER TABLE accounts ADD COLUMN return_at TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE connections ADD COLUMN calendar_event_id TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE connections ADD COLUMN calendar_start TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE connections ADD COLUMN calendar_end TEXT NOT NULL DEFAULT ''`,
+			`INSERT INTO schema_migrations(version) VALUES(4)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()

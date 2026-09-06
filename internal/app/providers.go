@@ -15,6 +15,7 @@ import (
 type providerError struct {
 	message   string
 	reconnect bool
+	status    int
 }
 
 func (e *providerError) Error() string { return e.message }
@@ -73,6 +74,12 @@ func slackError(ok bool, code string) error {
 }
 
 func (a *Server) setStatus(ctx context.Context, c Connection, target string) error {
+	if c.Provider == "calendar" {
+		return a.setCalendarStatus(ctx, c, target)
+	}
+	if c.Provider == "gmail" {
+		return a.setGmailStatus(ctx, c, target)
+	}
 	token, err := a.store.decrypt(c.token, c.Provider+":"+c.remoteID)
 	if err != nil {
 		return &providerError{message: "This connection needs refreshing. Please reconnect.", reconnect: true}
@@ -135,6 +142,9 @@ func (a *Server) setStatus(ctx context.Context, c Connection, target string) err
 type identity struct{ remoteID, label, name, token string }
 
 func (a *Server) exchange(ctx context.Context, provider, code, verifier string) (identity, error) {
+	if isGoogle(provider) {
+		return a.exchangeGoogle(ctx, provider, code, verifier)
+	}
 	callback := a.cfg.AppURL + "/auth/" + provider + "/callback"
 	form := url.Values{"code": {code}, "redirect_uri": {callback}}
 	if provider == "github" {

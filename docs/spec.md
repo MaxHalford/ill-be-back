@@ -36,3 +36,29 @@ stay encrypted server-side; secure server sessions and CSRF protect changes.
 Confirmed test seam: the HTTP API, covering OAuth/account isolation, away/back,
 per-account messages, and partial failures. Simulate external provider HTTP responses;
 exercise real application routing, sessions, CSRF, encryption, and database storage.
+
+## Google milestone
+
+User requested Gmail and Calendar and accepted Google's verification process for
+a public app. Support and verification contact: maxhalford25@gmail.com.
+
+- Add Gmail and Google Calendar to the existing picker, including multiple Google
+  accounts. Gmail and Calendar for the same Google subject share one sign-in identity.
+- Gmail away enables a vacation reply using the saved text. Preserve existing
+  contacts/domain recipient restrictions, replace previous HTML/text and expiry.
+  Back disables the responder. Do not read mail or request mail-reading scopes.
+- Calendar creates native out-of-office events on the primary calendar of supported
+  work accounts. Implementation assumption, disclosed during work: ask a return date
+  and time when Calendar is connected, because Google requires an end time.
+  This is the sole exception to the first release's no-dates scope. No scheduler.
+  Other providers still require manual clearing. Do not decline invitations.
+- Retry must not duplicate events, and back must delete only the event created here.
+  Persist event tracking before requests; do not claim expired Calendar absences
+  remain active. Report unsupported accounts and provider failures honestly.
+- Request only identity/email and the selected service's required OAuth scope;
+  store refresh credentials encrypted, renew access and support reconnect.
+- Publish accurate privacy/terms and a support contact. Permit account/data deletion
+  even when external credentials are revoked, explaining external statuses remain.
+- Prepare Google Cloud and verification materials. Public Google availability remains
+  pending owned-domain branding verification, scope review and any required security
+  assessment. No claim of Google approval and no paid assessment booking.

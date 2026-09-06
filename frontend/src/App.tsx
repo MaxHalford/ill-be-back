@@ -14,13 +14,38 @@ import { getState, request } from "./api";
 import { AppIcon } from "./icons";
 import type { AppState, Availability, Connection, Provider } from "./types";
 
-const names: Record<Provider, string> = { github: "GitHub", slack: "Slack" };
+const names: Record<Provider, string> = {
+  github: "GitHub",
+  slack: "Slack",
+  gmail: "Gmail",
+  calendar: "Google Calendar",
+};
+const limits: Record<Provider, number> = {
+  github: 80,
+  slack: 100,
+  gmail: 1000,
+  calendar: 100,
+};
+const descriptions: Record<Provider, string> = {
+  github: "Profile status and availability",
+  slack: "Profile status in your workspace",
+  gmail: "Vacation replies using your saved message",
+  calendar: "Out-of-office events · supported work accounts only",
+};
+function localDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
 const empty: AppState = {
   authenticated: false,
   name: "",
   desiredStatus: "available",
+  returnAt: "",
   connections: [],
-  providers: { github: false, slack: false },
+  providers: { github: false, slack: false, gmail: false, calendar: false },
   csrfToken: "",
 };
 export default function App() {
@@ -28,11 +53,41 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [modal, setModal] = useState<"settings" | "connect" | null>(null);
+  const [modal, setModal] = useState<
+    "settings" | "connect" | "return" | "delete" | null
+  >(null);
+  const [returnAt, setReturnAt] = useState("");
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
-  const connections = state.connections;
+  const [now, setNow] = useState(Date.now);
+  const connections = state.connections.map((c) =>
+    c.provider === "calendar" &&
+    c.status === "away" &&
+    new Date(c.awayUntil || "").getTime() <= now
+      ? {
+          ...c,
+          status: "unknown" as const,
+          error:
+            "Your Calendar absence ended. Choose a new return time or switch back.",
+        }
+      : c,
+  );
+  useEffect(() => {
+    const deadlines = state.connections
+      .filter((c) => c.provider === "calendar" && c.status === "away")
+      .map((c) => new Date(c.awayUntil || "").getTime())
+      .filter((end) => end > now);
+    if (!deadlines.length) return;
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(
+        2_147_483_647,
+        Math.max(0, Math.min(...deadlines) - Date.now()) + 50,
+      ),
+    );
+    return () => window.clearTimeout(timer);
+  }, [state.connections, now]);
   const desired = state.desiredStatus;
   const away = desired === "away";
   const succeeded = connections.filter(
@@ -91,7 +146,23 @@ export default function App() {
     setModal("settings");
   }
 
-  async function update(target: Availability) {
+  function startUpdate(target: Availability) {
+    if (
+      target === "away" &&
+      connections.some((c) => c.provider === "calendar")
+    ) {
+      setReturnAt(
+        state.returnAt && new Date(state.returnAt).getTime() > Date.now()
+          ? localDateTime(state.returnAt)
+          : "",
+      );
+      setModal("return");
+      return;
+    }
+    void update(target);
+  }
+
+  async function update(target: Availability, until = "") {
     if (!state.authenticated) {
       setModal("connect");
       return;
@@ -102,8 +173,10 @@ export default function App() {
       setState(
         await request<AppState>("status", state.csrfToken, {
           status: target,
+          returnAt: until,
         }),
       );
+      setModal(null);
     } catch (e) {
       setNotice((e as Error).message);
       setState((current) => ({
@@ -191,24 +264,45 @@ export default function App() {
     }
   }
 
+  async function deleteAccount() {
+    setBusy(true);
+    setNotice("");
+    try {
+      setState(
+        await request<AppState>("account", state.csrfToken, {}, "DELETE"),
+      );
+      setModal(null);
+      setNotice("Your account and stored connections have been deleted.");
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const connectionButtons = (
     <div className="connect-options">
-      {(["slack", "github"] as Provider[]).map((provider) => (
-        <a
-          key={provider}
-          className={`connect-option ${!state.providers[provider] || busy ? "disabled" : ""}`}
-          href={
-            state.providers[provider] && !busy ? `/auth/${provider}` : undefined
-          }
-          aria-disabled={!state.providers[provider] || busy}
-        >
-          <AppIcon app={provider} />
-          <span>
-            {names[provider]}
-            {!state.providers[provider] && <small>Not available yet</small>}
-          </span>
-        </a>
-      ))}
+      {(["slack", "github", "gmail", "calendar"] as Provider[]).map(
+        (provider) => (
+          <a
+            key={provider}
+            className={`connect-option ${!state.providers[provider] || busy ? "disabled" : ""}`}
+            href={
+              state.providers[provider] && !busy
+                ? `/auth/${provider}`
+                : undefined
+            }
+            aria-disabled={!state.providers[provider] || busy}
+          >
+            <AppIcon app={provider} />
+            <span>
+              {names[provider]}
+              <small>{descriptions[provider]}</small>
+              {!state.providers[provider] && <small>Not available yet</small>}
+            </span>
+          </a>
+        ),
+      )}
     </div>
   );
 
@@ -266,13 +360,15 @@ export default function App() {
               : !synced
                 ? "Check the results below. You can retry any updates that haven’t been confirmed."
                 : away
-                  ? "Your away statuses will stay on until you come back."
+                  ? connections.some((c) => c.provider === "calendar")
+                    ? "Calendar ends at your return time. Use I’m back to clear your other apps."
+                    : "Your away statuses will stay on until you come back."
                   : "Taking some time off? Let your apps know."}
           </p>
           <button
             className="primary-button"
             disabled={loading || busy}
-            onClick={() => update(away ? "available" : "away")}
+            onClick={() => startUpdate(away ? "available" : "away")}
           >
             {busy && <LoaderCircle className="spin" size={18} />}
             {loading
@@ -293,7 +389,7 @@ export default function App() {
                 <button
                   className="text-button"
                   disabled={busy}
-                  onClick={() => update(desired)}
+                  onClick={() => startUpdate(desired)}
                 >
                   {failed ? "Retry updates" : "Update apps"}{" "}
                   <RefreshCw size={13} />
@@ -341,6 +437,15 @@ export default function App() {
                       "Away status cleared."
                     )}
                   </p>
+                  {c.provider === "calendar" && c.awayUntil && (
+                    <p className="small">
+                      Until{" "}
+                      {new Date(c.awayUntil).toLocaleString([], {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  )}
                   {c.error && (
                     <div className="connection-error">
                       <p>{c.error}</p>
@@ -354,7 +459,7 @@ export default function App() {
                         <button
                           className="text-button"
                           disabled={busy}
-                          onClick={() => update(desired)}
+                          onClick={() => startUpdate(desired)}
                         >
                           Retry updates
                         </button>
@@ -372,9 +477,6 @@ export default function App() {
           >
             <Plus size={16} /> Add an app
           </button>
-          <p className="small coming-next">
-            Gmail and Google Calendar are next.
-          </p>
         </section>
 
         <section className="explanation" aria-labelledby="how-heading">
@@ -385,11 +487,17 @@ export default function App() {
             <strong>I’m back</strong> when you return.
           </p>
           <p>
-            This updates your profile statuses. It doesn’t mute notifications or
-            change your working hours.
+            Slack and GitHub show your status. Gmail sends vacation replies.
+            Calendar blocks time until your return, without declining
+            invitations. Notifications and working hours stay as you set them.
           </p>
         </section>
       </main>
+      <footer>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:maxhalford25@gmail.com">Support</a>
+      </footer>
       <dialog
         ref={dialog}
         onCancel={() => setModal(null)}
@@ -414,12 +522,86 @@ export default function App() {
                 app.
               </p>
               {connectionButtons}
+              {state.googleTesting && (
+                <p className="settings-note">
+                  Google connections are in testing. Only invited testers can
+                  connect while we prepare public verification.
+                </p>
+              )}
               <div className="privacy-note">
                 <ShieldCheck size={16} />
                 <span>
-                  We only update your status. Your messages and repositories
-                  stay yours.
+                  Gmail access is used for vacation settings; Calendar access is
+                  used for absences created here.{" "}
+                  <a href="/privacy">How we use your data</a>.
                 </span>
+              </div>
+            </>
+          )}
+          {modal === "return" && (
+            <>
+              <h2 id="dialog-title">When will you be back?</h2>
+              <p>
+                Google Calendar needs an end time for your out-of-office event.
+                Your other apps stay away until you press I’m back.
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void update("away", new Date(returnAt).toISOString());
+                }}
+              >
+                <label className="message-field">
+                  Return date and time
+                  <input
+                    type="datetime-local"
+                    value={returnAt}
+                    min={localDateTime(
+                      new Date(Date.now() + 60_000).toISOString(),
+                    )}
+                    onChange={(e) => setReturnAt(e.target.value)}
+                    required
+                  />
+                </label>
+                <p className="settings-note">
+                  Your timezone:{" "}
+                  {Intl.DateTimeFormat().resolvedOptions().timeZone}. Existing
+                  invitations won’t be declined.
+                </p>
+                <button className="main-button" disabled={busy}>
+                  {busy ? "Updating…" : "Set all apps to away"}
+                </button>
+              </form>
+            </>
+          )}
+          {modal === "delete" && (
+            <>
+              <h2 id="dialog-title">Delete your account?</h2>
+              <p>
+                This permanently deletes your account, saved messages,
+                connections and sign-in sessions here.
+              </p>
+              <p>
+                It leaves your current statuses, Gmail vacation replies and
+                Calendar events in place. Use I’m back first, or clear them
+                directly in each app. You can also revoke access in each
+                provider’s settings.
+              </p>
+              <div className="delete-actions">
+                <button
+                  className="main-button"
+                  disabled={busy}
+                  onClick={deleteAccount}
+                >
+                  Delete account and data
+                </button>
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => setModal("settings")}
+                >
+                  Cancel
+                </button>
               </div>
             </>
           )}
@@ -434,22 +616,34 @@ export default function App() {
                       <AppIcon app={c.provider} />
                       {names[c.provider]}
                       <small>
-                        {(messages[c.id] || "").length}/
-                        {c.provider === "github" ? 80 : 100}
+                        {(messages[c.id] || "").length}/{limits[c.provider]}
                       </small>
                     </span>
                     <span className="message-account">{c.label}</span>
                     <div className="input-wrap">
                       <span>🌴</span>
-                      <input
-                        value={messages[c.id] || ""}
-                        onChange={(e) =>
-                          setMessages({ ...messages, [c.id]: e.target.value })
-                        }
-                        maxLength={c.provider === "github" ? 80 : 100}
-                        required
-                        aria-label={`${names[c.provider]} ${c.label} away message`}
-                      />
+                      {c.provider === "gmail" ? (
+                        <textarea
+                          value={messages[c.id] || ""}
+                          onChange={(e) =>
+                            setMessages({ ...messages, [c.id]: e.target.value })
+                          }
+                          maxLength={limits.gmail}
+                          required
+                          rows={4}
+                          aria-label={`${names[c.provider]} ${c.label} away message`}
+                        />
+                      ) : (
+                        <input
+                          value={messages[c.id] || ""}
+                          onChange={(e) =>
+                            setMessages({ ...messages, [c.id]: e.target.value })
+                          }
+                          maxLength={limits[c.provider]}
+                          required
+                          aria-label={`${names[c.provider]} ${c.label} away message`}
+                        />
+                      )}
                     </div>
                   </label>
                 ))}
@@ -504,6 +698,13 @@ export default function App() {
                   </p>
                   <button className="logout" onClick={logout} disabled={busy}>
                     <LogOut size={14} /> Sign out
+                  </button>
+                  <button
+                    className="delete-account"
+                    onClick={() => setModal("delete")}
+                    disabled={busy}
+                  >
+                    Delete account and data
                   </button>
                 </div>
               )}

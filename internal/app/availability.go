@@ -16,7 +16,8 @@ func (a *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Status string `json:"status"`
+		Status   string `json:"status"`
+		ReturnAt string `json:"returnAt"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -43,6 +44,21 @@ func (a *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "Connect an app first.")
 		return
 	}
+	if input.Status == "away" {
+		for i, c := range connections {
+			if c.Provider != "calendar" {
+				continue
+			}
+			end, err := time.Parse(time.RFC3339, input.ReturnAt)
+			if err != nil || !end.After(time.Now()) {
+				problem(w, 400, "Choose a future return date and time for Google Calendar.")
+				return
+			}
+			connections[i].AwayUntil = end.UTC().Format(time.RFC3339)
+		}
+	} else {
+		input.ReturnAt = ""
+	}
 	// Mark every target uncertain atomically before sending requests. If the total
 	// deadline expires, queued accounts cannot retain a stale success from an earlier switch.
 	tx, err := a.store.db.BeginTx(ctx, nil)
@@ -51,7 +67,7 @@ func (a *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `UPDATE accounts SET desired_status=$1 WHERE id=$2`, input.Status, s.account); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE accounts SET desired_status=$1,return_at=$2 WHERE id=$3`, input.Status, input.ReturnAt, s.account); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -158,6 +174,9 @@ func (a *Server) messages(w http.ResponseWriter, r *http.Request) {
 		if c.Provider == "github" {
 			limit = 80
 		}
+		if c.Provider == "gmail" {
+			limit = 1000
+		}
 		message = strings.TrimSpace(message)
 		if message == "" || !utf8.ValidString(message) || utf8.RuneCountInString(message) > limit {
 			problem(w, 400, "Use a non-empty message within the app’s character limit.")
@@ -186,6 +205,28 @@ func (a *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.respondState(w, r, s)
+}
+
+// Deletion is independent of external APIs, so revoked credentials can never
+// prevent a user from deleting the data stored here. The UI explains that
+// existing provider statuses must be cleared separately.
+func (a *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	s, ok := a.authenticated(w, r)
+	if !ok {
+		return
+	}
+	unlock, err := a.store.lock(r.Context(), s.account)
+	if err != nil {
+		a.lockError(w, err)
+		return
+	}
+	defer unlock()
+	if _, err = a.store.db.ExecContext(r.Context(), `DELETE FROM accounts WHERE id=$1`, s.account); err != nil {
+		internalError(w, err)
+		return
+	}
+	a.cookie(w, "", -1)
+	a.respondState(w, r, session{})
 }
 
 func (a *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -242,8 +283,25 @@ func (a *Server) disconnect(w http.ResponseWriter, r *http.Request) {
 		a.respondState(w, r.WithContext(ctx), session{})
 		return
 	}
-	_, err = a.store.db.ExecContext(ctx, `DELETE FROM connections WHERE account_id=$1 AND id=$2`, s.account, found.ID)
+	tx, err := a.store.db.BeginTx(ctx, nil)
 	if err != nil {
+		internalError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `DELETE FROM connections WHERE account_id=$1 AND id=$2`, s.account, found.ID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if isGoogle(found.Provider) {
+		_, err = tx.ExecContext(ctx, `DELETE FROM google_identities WHERE account_id=$1 AND remote_id=$2 AND NOT EXISTS (SELECT 1 FROM connections WHERE account_id=$1 AND remote_id=$2 AND provider IN ('gmail','calendar'))`, s.account, found.remoteID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
 		internalError(w, err)
 		return
 	}
