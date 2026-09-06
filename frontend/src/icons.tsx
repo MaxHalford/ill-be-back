@@ -57,11 +57,3 @@ export function AppIcon({ app }: { app: Provider | "gmail" | "calendar" }) {
     </svg>
   );
 }
-
-export function PixelMark() {
-  return (
-    <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
-      <path d="M3 10h11v3h4v-3h11v10h-3v3h-7v-3h-6v3H6v-3H3zm3 3v5h5v-5zm15 0v5h5v-5z" />
-    </svg>
-  );
-}

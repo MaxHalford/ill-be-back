@@ -2,7 +2,7 @@
   "display_information": {
     "name": "I'll Be Back",
     "description": "One switch for your out-of-office status.",
-    "background_color": "#242823"
+    "background_color": "#316daa"
   },
   "oauth_config": {
     "redirect_urls": ["https://ill-be-back-production.up.railway.app/auth/slack/callback"],

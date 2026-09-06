@@ -132,6 +132,5 @@ HTTP responses are simulated; the suite never changes a real account’s status.
 OAuth replay, account isolation, CSRF, message validation, exact status payloads, partial
 failure/reconnection, malformed provider replies, concurrent switches, and disconnection.
 
-The confirmed scope is in [`docs/spec.md`](docs/spec.md). Pixel artwork, created with the
-built-in ImageGen tool, is in `frontend/public/art/status-scenes.png`; its full prompt is
-recorded in [`docs/artwork.md`](docs/artwork.md).
+The confirmed scope is in [`docs/spec.md`](docs/spec.md). The interface uses a simple
+white page, blue accents, and system fonts, inspired by https://playaphone.com/.

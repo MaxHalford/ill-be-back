@@ -14,8 +14,10 @@ timezones, notification controls, payment system, or team administration.
 - Persist preferences and connections. Do not prompt for text on each toggle.
 - Show each integration's update result. Retain successful changes on partial failure;
   offer retry/reconnection. Do not claim all services updated if some failed.
-- Pixel-art Schwarzenegger, Terminator outfit when available and tropical beach mode
-  when away; a subtle transition and explicit state label. Useful tool with personality.
+- Simple, down-to-earth visual design inspired by https://playaphone.com/: a white
+  page with blue margins, system fonts, readable text, one primary button, and a plain
+  list of apps. No pixel art, character imagery, or Terminator-themed copy. This replaces
+  the initial artwork direction at the user's request. Keep explicit availability labels.
 - GitHub and Slack ship first. Gmail vacation replies and Google Calendar absence
   events are the next milestone, before scheduling and notification controls.
 - Host on Railway (the user corrected "Southworks"). The backend must be Go.

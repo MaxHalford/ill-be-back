@@ -1,27 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowRight,
   Check,
-  CheckCheck,
-  ChevronRight,
-  CircleHelp,
-  DoorOpen,
   ExternalLink,
   LoaderCircle,
   LogOut,
-  Monitor,
-  Palmtree,
-  Plug,
   RefreshCw,
-  Settings2,
   ShieldCheck,
-  Sparkles,
   Unplug,
   X,
 } from "lucide-react";
 import { getState, request } from "./api";
-import { AppIcon, PixelMark } from "./icons";
+import { AppIcon } from "./icons";
 import type { AppState, Availability, Connection, Provider } from "./types";
 
 const names: Record<Provider, string> = { github: "GitHub", slack: "Slack" };
@@ -64,9 +53,7 @@ export default function App() {
   const [demoConnections, setDemoConnections] = useState(previewConnections);
   const [demoStatus, setDemoStatus] = useState<Availability>("available");
   const [notice, setNotice] = useState("");
-  const [modal, setModal] = useState<"settings" | "connect" | "help" | null>(
-    null,
-  );
+  const [modal, setModal] = useState<"settings" | "connect" | null>(null);
   const [messages, setMessages] = useState<Record<Provider, string>>({
     github: "Out of office",
     slack: "Out of office",
@@ -257,390 +244,251 @@ export default function App() {
 
   const connectionButtons = (
     <div className="connect-options">
-      {(["slack", "github"] as Provider[]).map((p) => (
+      {(["slack", "github"] as Provider[]).map((provider) => (
         <a
-          key={p}
-          className={`connect-option ${!state.providers[p] ? "disabled" : ""}`}
-          href={state.providers[p] ? `/auth/${p}` : undefined}
-          aria-disabled={!state.providers[p]}
+          key={provider}
+          className={`connect-option ${!state.providers[provider] ? "disabled" : ""}`}
+          href={state.providers[provider] ? `/auth/${provider}` : undefined}
+          aria-disabled={!state.providers[provider]}
         >
-          <span className="app-icon">
-            <AppIcon app={p} />
-          </span>
+          <AppIcon app={provider} />
           <span>
-            Continue with {names[p]}
-            {!state.providers[p] && (
-              <small>Available once the app is set up</small>
-            )}
+            Continue with {names[provider]}
+            {!state.providers[provider] && <small>Not available yet</small>}
           </span>
-          <ArrowRight size={18} />
         </a>
       ))}
     </div>
   );
 
   return (
-    <div className={`app ${away ? "is-away" : ""}`}>
-      <header className="header">
-        <a href="/" className="brand">
-          <span className="brand-mark">
-            <PixelMark />
-          </span>
-          <span>
-            i’ll be back<span className="brand-period">.</span>
-          </span>
-        </a>
-        <nav aria-label="Main navigation">
-          <a href="#dashboard" className="nav-active">
-            My status
-          </a>
-          <a href="#apps">My apps</a>
-        </nav>
+    <div className="page">
+      <header>
+        <h1>
+          <a href="/">I’ll Be Back</a>
+        </h1>
         <button
-          className="header-action"
+          className="text-button"
           onClick={() =>
             state.authenticated || preview
               ? openSettings()
               : setModal("connect")
           }
         >
-          <span className="avatar">
-            {state.name ? state.name[0].toUpperCase() : <PixelMark />}
-          </span>
-          <span>
-            {preview
-              ? "Preview mode"
-              : state.authenticated
-                ? state.name
-                : "Get started"}
-          </span>
-          <ChevronRight size={15} />
+          {state.authenticated
+            ? "Account & settings"
+            : preview
+              ? "Settings"
+              : "Sign in"}
         </button>
       </header>
+      <main>
+        <p className="introduction">
+          Let people know when you’re away. Set your out-of-office status in
+          Slack and GitHub with one button.
+        </p>
 
-      <main id="dashboard">
         {preview && (
           <div className="preview-banner">
-            <span>
-              <Sparkles size={15} /> You’re taking a test drive. No real
-              statuses will change.
-            </span>
+            <p>
+              <strong>Preview.</strong> No real accounts or statuses will
+              change.
+            </p>
             <button
+              className="text-button"
               onClick={() => {
                 setPreview(false);
                 setNotice("");
               }}
             >
-              Exit preview <X size={14} />
+              Exit preview
             </button>
           </div>
         )}
-        <section className="intro">
-          <div>
-            <div className="eyebrow">
-              <span /> LESS STATUS UPDATING. MORE LIVING.
-            </div>
-            <h1>
-              Your time. <span>On your terms.</span>
-            </h1>
-            <p>
-              One switch to let everyone know you’re away. Go do your thing.
-            </p>
-          </div>
-          <button className="how-button" onClick={() => setModal("help")}>
-            <CircleHelp size={16} /> How it works
-          </button>
-        </section>
-
         {notice && (
           <div className="notice" role="status">
             <span>{notice}</span>
             <button aria-label="Dismiss message" onClick={() => setNotice("")}>
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
         )}
 
-        <section className="dashboard-grid" aria-label="Availability controls">
-          <div className="scene-card">
-            <div className="scene-top">
-              <span className="scene-label">
-                <span className={`led ${away ? "amber" : ""}`} />
-                {away ? "VACATION PROTOCOL" : "WORK MODE: ACTIVATED"}
-              </span>
-              <span className="scene-number">
-                {away ? "02 / 02" : "01 / 02"}
-              </span>
-            </div>
-            <div
-              role="img"
-              aria-label={
-                away
-                  ? "Pixel-art Schwarzenegger relaxing on a tropical beach in a Hawaiian shirt"
-                  : "Pixel-art Schwarzenegger in sunglasses and a leather jacket against a futuristic city"
-              }
-              className={`scene-art ${away ? "scene-away" : ""}`}
+        <section className="availability" aria-label="Availability controls">
+          <div className="availability-heading">
+            <span
+              className={`status-dot ${away ? "away" : ""} ${connections.length && !synced ? "unconfirmed" : ""}`}
+              aria-hidden="true"
             />
-            <div className="scene-caption">
+            <h2>
+              {connections.length && !synced
+                ? failed
+                  ? "Some apps need attention."
+                  : "Ready to update your apps."
+                : away
+                  ? "You’re away."
+                  : connections.length
+                    ? "You’re available."
+                    : "Ready when you are."}
+            </h2>
+          </div>
+          <p>
+            {!connections.length
+              ? "Connect an app below to get started."
+              : !synced
+                ? "Check the results below. You can retry any updates that haven’t been confirmed."
+                : away
+                  ? "Your away statuses will stay on until you come back."
+                  : "Taking some time off? Let your apps know."}
+          </p>
+          <button
+            className="primary-button"
+            disabled={loading || busy}
+            onClick={() => update(away ? "available" : "away")}
+          >
+            {busy && <LoaderCircle className="spin" size={18} />}
+            {loading
+              ? "Loading…"
+              : busy
+                ? "Updating…"
+                : away
+                  ? "I’m back"
+                  : "I’m away"}
+          </button>
+          {connections.length > 0 && (
+            <div className="sync-result" aria-live="polite">
               <span>
-                {away
-                  ? "Hasta la vista, meetings."
-                  : "All systems operational."}
+                {succeeded} of {connections.length} apps{" "}
+                {away ? "set to away" : "cleared"}
+                {preview ? " (preview)" : ""}.
               </span>
-              <span className="pixel-spark">✦</span>
+              {!synced && (
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => update(desired)}
+                >
+                  {failed ? "Retry updates" : "Update apps"}{" "}
+                  <RefreshCw size={13} />
+                </button>
+              )}
             </div>
-          </div>
-
-          <div className="control-card">
-            <div className="control-top">
-              <span className="eyebrow">YOUR AVAILABILITY</span>
-              <span className={`status-pill ${away ? "away" : ""}`}>
-                <span className="led" />
-                {connections.length && !synced
-                  ? failed
-                    ? "Needs attention"
-                    : "Ready to sync"
-                  : away
-                    ? "Away"
-                    : "Available"}
-              </span>
-            </div>
-            <div className="control-copy">
-              <div className="mode-icon">
-                {away ? (
-                  <Palmtree size={27} strokeWidth={1.5} />
-                ) : (
-                  <Monitor size={26} strokeWidth={1.5} />
-                )}
-              </div>
-              <h2>
-                {away ? (
-                  <>
-                    You’ll be back.
-                    <br />
-                    Go enjoy yourself.
-                  </>
-                ) : (
-                  <>
-                    On the clock.
-                    <br />
-                    Until you’re not.
-                  </>
-                )}
-              </h2>
-              <p>
-                {away
-                  ? synced
-                    ? "Your apps know you’re out. Your time is yours until you switch back."
-                    : "Your away switch is on. Check your apps below to see which statuses updated."
-                  : "Ready for a break? Let your work apps do the explaining."}
-              </p>
-            </div>
-            <div className="control-bottom">
-              <button
-                className="main-button"
-                disabled={loading || busy}
-                onClick={() => update(away ? "available" : "away")}
-              >
-                {busy ? (
-                  <LoaderCircle className="spin" size={20} />
-                ) : away ? (
-                  <ArrowRight size={20} />
-                ) : (
-                  <DoorOpen size={20} />
-                )}
-                <span>
-                  {loading
-                    ? "Getting ready…"
-                    : busy
-                      ? "Updating your apps…"
-                      : away
-                        ? "I’m back"
-                        : "I’m away"}
-                </span>
-                <span className="button-key">{away ? "↵" : "→"}</span>
-              </button>
-              <p className="button-note">
-                {away
-                  ? "One click to clear your away statuses."
-                  : "No timer. Come back when you’re ready."}
-              </p>
-              <div className="sync-line" aria-live="polite">
-                {connections.length ? (
-                  <>
-                    <CheckCheck size={16} />
-                    <span>
-                      {succeeded} of {connections.length} apps{" "}
-                      {away ? "set to away" : "ready"}
-                      {preview && " · preview"}
-                    </span>
-                    {!synced && (
-                      <button disabled={busy} onClick={() => update(desired)}>
-                        {failed ? "Retry" : "Sync apps"} <RefreshCw size={12} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={15} />
-                    <span>Connect your apps to get started</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
+          <p className="small">
+            “I’m back” clears your away statuses. No timers or schedules.
+          </p>
         </section>
 
-        <section className="apps-section" id="apps">
+        <section className="apps-section" aria-labelledby="apps-heading">
           <div className="section-heading">
-            <div>
-              <h3>
-                Your apps{" "}
-                <span>{connections.length.toString().padStart(2, "0")}</span>
-              </h3>
-              <p>Your availability, in all the right places.</p>
-            </div>
+            <h2 id="apps-heading">Your apps</h2>
             <button className="text-button" onClick={openSettings}>
-              <Settings2 size={15} /> Customize messages
+              Edit away messages
             </button>
           </div>
-          <div className="apps-grid">
+          <div className="app-list">
             {(["slack", "github"] as Provider[]).map((provider) => {
               const c = connections.find((item) => item.provider === provider);
               return (
-                <article
-                  className={`app-card ${c?.error ? "has-error" : ""}`}
-                  key={provider}
-                >
-                  <div className="app-card-header">
+                <article className="app-row" key={provider}>
+                  <div className="app-row-heading">
                     <span className="app-icon">
                       <AppIcon app={provider} />
                     </span>
-                    <div>
-                      <h4>{names[provider]}</h4>
-                      <span className="account-label">
-                        {c
-                          ? c.label
-                          : provider === "slack"
-                            ? "Keep your workspace in the know"
-                            : "Let collaborators know you’re away"}
-                      </span>
+                    <div className="app-name">
+                      <h3>{names[provider]}</h3>
+                      <p>{c ? c.label : "Not connected"}</p>
                     </div>
-                    {c && (
+                    {c ? (
                       <span
-                        className={`connection-badge ${c.error ? "error" : ""}`}
+                        className={`connection-label ${c.error ? "error-text" : ""}`}
                       >
                         {c.error
                           ? "Needs attention"
                           : preview
                             ? "Preview"
                             : "Connected"}
-                        {!c.error && <Check size={11} />}
                       </span>
+                    ) : (
+                      <button
+                        className="text-button"
+                        onClick={() => setModal("connect")}
+                      >
+                        Connect
+                        <span className="sr-only"> {names[provider]}</span>
+                      </button>
                     )}
                   </div>
-                  {c ? (
-                    <>
-                      <div className="status-preview">
-                        <span>
-                          {c.status === "away"
-                            ? "🌴"
-                            : c.status === "unknown"
-                              ? "—"
-                              : "☕"}
-                        </span>
-                        <span>
-                          {c.status === "away"
-                            ? c.appliedMessage
-                            : c.status === "unknown"
-                              ? "Ready for your first switch"
-                              : "No away status"}
-                        </span>
-                        <span className="preview-label">STATUS</span>
-                      </div>
-                      {c.error ? (
+                  {c && (
+                    <div className="app-details">
+                      <p className="current-status">
+                        {c.status === "away" ? (
+                          <>🌴 {c.appliedMessage}</>
+                        ) : c.status === "unknown" ? (
+                          c.error ? (
+                            "Status not confirmed."
+                          ) : (
+                            "No update made yet."
+                          )
+                        ) : (
+                          "Away status cleared."
+                        )}
+                      </p>
+                      {c.error && (
                         <div className="connection-error">
                           <p>{c.error}</p>
                           {c.needsReconnect ? (
                             <a href={`/auth/${provider}`}>
                               Reconnect {names[provider]}{" "}
-                              <ExternalLink size={12} />
+                              <ExternalLink size={13} />
                             </a>
                           ) : (
                             <button
+                              className="text-button"
                               disabled={busy}
                               onClick={() => update(desired)}
                             >
-                              Try again <RefreshCw size={12} />
+                              Try again
                             </button>
                           )}
                         </div>
-                      ) : (
-                        <div className="app-card-footer">
-                          <span>
-                            <span
-                              className={`mini-dot ${c.status === "away" ? "amber" : ""}`}
-                            />
-                            {c.updatedAt
-                              ? "Last update confirmed"
-                              : "Ready when you are"}
-                          </span>
-                          <button
-                            onClick={openSettings}
-                            aria-label={`Edit ${names[provider]} message`}
-                          >
-                            <Settings2 size={15} />
-                          </button>
-                        </div>
                       )}
-                    </>
-                  ) : (
-                    <div className="unconnected">
-                      <span>Make your next break a little easier.</span>
-                      <button onClick={() => setModal("connect")}>
-                        Connect <Plug size={14} />
-                      </button>
                     </div>
                   )}
                 </article>
               );
             })}
           </div>
-          <div className="coming-next">
-            <div className="coming-icons">
-              <AppIcon app="gmail" />
-              <AppIcon app="calendar" />
-            </div>
-            <span>
-              <strong>More apps. Same little switch.</strong> Gmail & Google
-              Calendar are up next.
-            </span>
-            <span className="soon-badge">COMING SOON</span>
-          </div>
+          <p className="small coming-next">
+            Gmail and Google Calendar are next.
+          </p>
         </section>
 
-        {!state.authenticated && !preview && (
-          <div className="try-preview">
-            <span>Curious what clocking out looks like?</span>
+        <section className="explanation" aria-labelledby="how-heading">
+          <h2 id="how-heading">How it works</h2>
+          <p>
+            Connect your apps and choose an away message for each. Press{" "}
+            <strong>I’m away</strong> when you’re unavailable, then{" "}
+            <strong>I’m back</strong> when you return.
+          </p>
+          <p>
+            This updates your profile statuses. It doesn’t mute notifications or
+            change your working hours.
+          </p>
+          {!state.authenticated && !preview && (
             <button
+              className="text-button"
               onClick={() => {
                 setPreview(true);
                 setNotice("");
-                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
-              Take a test drive <ArrowRight size={15} />
+              Try it without connecting an account
             </button>
-          </div>
-        )}
-        <footer>
-          <span>
-            <PixelMark /> A little less online. A little more life.
-          </span>
-          <span>Made for humans. And the occasional cyborg.</span>
-        </footer>
+          )}
+        </section>
       </main>
-
+      <footer>A small tool for being clear about your availability.</footer>
       <dialog
         ref={dialog}
         onCancel={() => setModal(null)}
@@ -659,11 +507,7 @@ export default function App() {
           </button>
           {modal === "connect" && (
             <>
-              <span className="modal-symbol">
-                <Plug size={25} />
-              </span>
-              <div className="eyebrow">A ONE-TIME HELLO</div>
-              <h2 id="dialog-title">Bring your apps along.</h2>
+              <h2 id="dialog-title">Connect an app</h2>
               <p>
                 Sign in with an app to connect it. Add the other whenever you’re
                 ready.
@@ -683,18 +527,14 @@ export default function App() {
                   setModal(null);
                 }}
               >
-                Just looking? Try the preview <ArrowRight size={14} />
+                Try it without connecting
               </button>
             </>
           )}
           {modal === "settings" && (
             <>
-              <div className="eyebrow">MAKE IT YOURS</div>
-              <h2 id="dialog-title">A word before you go.</h2>
-              <p>
-                Choose what people see when you’re away. Keep it professional.
-                Or keep it you.
-              </p>
+              <h2 id="dialog-title">Away messages</h2>
+              <p>Choose the message each app shows when you’re away.</p>
               <form onSubmit={saveMessages}>
                 {(["slack", "github"] as Provider[]).map((provider) => (
                   <label className="message-field" key={provider}>
@@ -739,15 +579,13 @@ export default function App() {
                           }
                         }}
                       >
-                        Connect {names[provider]} to customize{" "}
-                        <ArrowRight size={12} />
+                        Connect {names[provider]} to edit its message
                       </a>
                     )}
                   </label>
                 ))}
                 <div className="settings-note">
-                  <CircleHelp size={15} /> Changes apply the next time you
-                  switch away.
+                  Changes apply the next time you switch away.
                 </div>
                 <button
                   className="main-button"
@@ -798,52 +636,6 @@ export default function App() {
                   </button>
                 </div>
               )}
-            </>
-          )}
-          {modal === "help" && (
-            <>
-              <div className="eyebrow">THE SHORT VERSION</div>
-              <h2 id="dialog-title">
-                Less admin.
-                <br />
-                More out of office.
-              </h2>
-              <div className="steps">
-                <div>
-                  <span>01</span>
-                  <section>
-                    <h3>Connect your work apps</h3>
-                    <p>
-                      Link Slack, GitHub, or both. Set your away messages once.
-                    </p>
-                  </section>
-                </div>
-                <ArrowDown size={17} />
-                <div>
-                  <span>02</span>
-                  <section>
-                    <h3>Make your exit</h3>
-                    <p>
-                      Hit “I’m away.” We set your status in every connected app
-                      and show you the results.
-                    </p>
-                  </section>
-                </div>
-                <ArrowDown size={17} />
-                <div>
-                  <span>03</span>
-                  <section>
-                    <h3>Come back on your terms</h3>
-                    <p>
-                      Hit “I’m back” to clear your away statuses. There’s no
-                      schedule, timer, or notification setting to manage.
-                    </p>
-                  </section>
-                </div>
-              </div>
-              <button className="main-button" onClick={() => setModal(null)}>
-                Sounds good <Check size={17} />
-              </button>
             </>
           )}
           {notice && (
