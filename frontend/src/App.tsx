@@ -621,7 +621,7 @@ export default function App() {
                     </span>
                     <span className="message-account">{c.label}</span>
                     <div className="input-wrap">
-                      <span>🌴</span>
+                      {c.provider !== "gmail" && <span>🌴</span>}
                       {c.provider === "gmail" ? (
                         <textarea
                           value={messages[c.id] || ""}
