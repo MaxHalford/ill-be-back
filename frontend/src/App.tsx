@@ -163,10 +163,20 @@ export default function App() {
         );
     } catch (e) {
       setNotice((e as Error).message);
-      if (!preview)
+      if (!preview) {
+        setState((current) => ({
+          ...current,
+          desiredStatus: target,
+          connections: current.connections.map((c) => ({
+            ...c,
+            status: "unknown",
+            error: "Update not confirmed. Check your connection, then retry.",
+          })),
+        }));
         getState()
           .then(setState)
           .catch(() => {});
+      }
     } finally {
       setBusy(false);
     }
@@ -212,6 +222,22 @@ export default function App() {
       setModal(null);
     } catch (e) {
       setNotice((e as Error).message);
+      setState((current) => ({
+        ...current,
+        connections: current.connections.map((c) =>
+          c.provider === provider
+            ? {
+                ...c,
+                status: "unknown",
+                error:
+                  "Disconnect not confirmed. Check your connection, then retry.",
+              }
+            : c,
+        ),
+      }));
+      getState()
+        .then(setState)
+        .catch(() => {});
     } finally {
       setBusy(false);
     }

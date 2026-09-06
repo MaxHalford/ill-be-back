@@ -1,5 +1,7 @@
 # I’ll Be Back
 
+[Open the app](https://ill-be-back-production.up.railway.app)
+
 One switch to announce your absence across GitHub and Slack. Press **I’m away**
 to set your saved per-app messages; press **I’m back** to clear them. No scheduling,
 return dates, or notification changes. Gmail and Google Calendar are the next milestone.

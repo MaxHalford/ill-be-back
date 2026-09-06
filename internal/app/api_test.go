@@ -429,3 +429,24 @@ func TestDisconnectClearsStatusAndLastConnectionDeletesAccount(t *testing.T) {
 		t.Fatal("deleted account returned old connection state")
 	}
 }
+
+func TestFailedDisconnectPersistsUncertaintyAndReconnect(t *testing.T) {
+	a := setup(t)
+	a.connect(t, "github")
+	a.connect(t, "slack")
+	s := a.state(t)
+	a.call(t, "POST", "/api/status", s.CSRFToken, map[string]string{"status": "away"})
+	a.provider.slackStatus = `{"ok":false,"error":"invalid_auth"}`
+	code, _ := a.call(t, "DELETE", "/api/connections/slack", s.CSRFToken, map[string]any{})
+	if code != 502 {
+		t.Fatalf("expected failed disconnect, got %d", code)
+	}
+	for _, c := range a.state(t).Connections {
+		if c.Provider == "slack" && (c.Status != "unknown" || c.Error == "" || !c.NeedsReconnect) {
+			t.Fatalf("failed disconnect left a false success: %+v", c)
+		}
+		if c.Provider == "github" && c.Status != "away" {
+			t.Fatal("failed Slack disconnect changed GitHub")
+		}
+	}
+}

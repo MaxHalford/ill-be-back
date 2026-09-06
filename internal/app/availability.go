@@ -48,7 +48,7 @@ func (a *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, c := range connections {
-		if err = a.applyStatus(ctx, s.account, c, input.Status); err != nil {
+		if _, err = a.applyStatus(ctx, s.account, c, input.Status); err != nil {
 			internalError(w, err)
 			return
 		}
@@ -58,10 +58,10 @@ func (a *Server) changeStatus(w http.ResponseWriter, r *http.Request) {
 
 // Each provider result is durable independently. A timeout has an unknown outcome,
 // and is never represented as either a successful change or a safe rollback.
-func (a *Server) applyStatus(ctx context.Context, account string, c Connection, target string) error {
+func (a *Server) applyStatus(ctx context.Context, account string, c Connection, target string) (bool, error) {
 	_, err := a.store.db.ExecContext(ctx, `UPDATE connections SET status='unknown',error='Update not yet confirmed.' WHERE account_id=$1 AND provider=$2`, account, c.Provider)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err = a.setStatus(ctx, c, target); err != nil {
 		message, reconnect := "We couldn’t confirm the update. Please try again.", 0
@@ -73,10 +73,10 @@ func (a *Server) applyStatus(ctx context.Context, account string, c Connection, 
 			}
 		}
 		_, err = a.store.db.ExecContext(ctx, `UPDATE connections SET error=$1,reconnect=$2 WHERE account_id=$3 AND provider=$4`, message, reconnect, account, c.Provider)
-		return err
+		return false, err
 	}
 	_, err = a.store.db.ExecContext(ctx, `UPDATE connections SET status=$1,error='',reconnect=0,updated_at=$2,applied_message=$3 WHERE account_id=$4 AND provider=$5`, target, time.Now().UTC().Format(time.RFC3339), c.Message, account, c.Provider)
-	return err
+	return err == nil, err
 }
 
 func (a *Server) lockError(w http.ResponseWriter, err error) {
@@ -184,7 +184,12 @@ func (a *Server) disconnect(w http.ResponseWriter, r *http.Request) {
 		problem(w, 404, "This app isn’t connected.")
 		return
 	}
-	if err = a.setStatus(ctx, *found, "available"); err != nil {
+	confirmed, err := a.applyStatus(ctx, s.account, *found, "available")
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !confirmed {
 		problem(w, 502, "We couldn’t clear this app’s status. Reconnect it or try again before disconnecting.")
 		return
 	}
