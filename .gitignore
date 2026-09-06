@@ -1,0 +1,10 @@
+.venv/
+.env
+*.sqlite3
+data/
+bin/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+coverage.out
+tmp/
