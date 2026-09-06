@@ -524,8 +524,8 @@ export default function App() {
               {connectionButtons}
               {state.googleTesting && (
                 <p className="settings-note">
-                  Google connections are in testing. Only invited testers can
-                  connect while we prepare public verification.
+                  Google access hasn’t been verified yet. Access may be limited,
+                  and Google may show an unverified-app warning.
                 </p>
               )}
               <div className="privacy-note">

@@ -6,9 +6,10 @@ App name: **I’ll Be Back**. Hosting: Railway; backend: Go.
 
 Status: integrations deployed; Gmail and Calendar APIs enabled; external OAuth
 client, declared scopes, branding links and the owner's test-user access configured.
-Google access remains in testing until verification finishes. No security assessment
-has been purchased or booked. Site ownership verification and a real demonstration
-on supported accounts are still needed.
+Railway site ownership is verified in Search Console through the homepage meta tag.
+Google's branding and data-access reviews are separate from site ownership. No
+security assessment has been purchased or booked. A real demonstration on supported
+accounts is still needed before submitting the data-access review.
 
 ## OAuth configuration
 
