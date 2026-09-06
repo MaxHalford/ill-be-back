@@ -7,7 +7,8 @@ App name: **I’ll Be Back**. Hosting: Railway; backend: Go.
 Status: integrations deployed; Gmail and Calendar APIs enabled; external OAuth
 client, declared scopes, branding links and the owner's test-user access configured.
 Railway site ownership is verified in Search Console through the homepage meta tag.
-Google's branding and data-access reviews are separate from site ownership. No
+OAuth publishing is in Production to allow review submission; this does not mean
+Google has verified the app. Branding and data-access reviews are separate. No
 security assessment has been purchased or booked. A real demonstration on supported
 accounts is still needed before submitting the data-access review.
 
@@ -21,10 +22,10 @@ Use these redirect URLs for the current deployment:
 - `https://ill-be-back-production.up.railway.app/auth/calendar/callback`
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` through Railway's secret variables.
-Do not commit credentials. Keep `GOOGLE_VERIFIED=false`; it displays the testing
-notice. Google Cloud's testing audience, not this flag, limits authorization.
-Testing grants for these permissions generally expire after seven days; reconnect
-when prompted. This is not the public production configuration.
+Do not commit credentials. Keep `GOOGLE_VERIFIED=false`; it displays the unverified
+access notice. Google still applies its unverified-app warning and user cap until
+review is complete. Testing grants issued before the switch to Production may
+expire after seven days; reconnect when prompted.
 
 ## Requested scopes and justification
 
@@ -59,7 +60,7 @@ sign-in identity. Different Google subjects are not merged by email.
 5. In Verification centre, submit branding and scope review. Complete the security
    assessment Google requests for server-side restricted-scope access, with an
    approved assessor. Confirm the quoted cost with Max before booking.
-6. Resolve review feedback, publish to Production and set `GOOGLE_VERIFIED=true`
+6. Resolve review feedback and set `GOOGLE_VERIFIED=true`
    only once the applicable reviews are approved. Verify public sign-in with a
    fresh external user, beyond the testing audience.
 

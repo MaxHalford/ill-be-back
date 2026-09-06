@@ -6,7 +6,8 @@ One switch to announce your absence across GitHub, Slack, Gmail and Google Calen
 Press **I’m away** to apply your saved per-account messages; press **I’m back** to clear
 them. Calendar asks for a return time and ends automatically; the other apps remain
 away until you return. No recurring schedules or notification controls.
-Google access is in testing pending public verification.
+Google OAuth is in production with verification pending; Google's unverified-app
+warning and user cap still apply.
 
 Go backend (`net/http`, `database/sql`), React + TypeScript frontend, SQLite locally,
 PostgreSQL on Railway. The same Go binary serves the API and compiled frontend.
@@ -84,7 +85,7 @@ Configure an external web OAuth client with `APP_URL/auth/gmail/callback` and
 `APP_URL/auth/calendar/callback`. Enable Gmail API and Google Calendar API and set
 `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Keep `GOOGLE_VERIFIED=false` until
 Google approves the public app and production publishing is enabled. This flag only
-controls the UI disclosure; Google Cloud's audience configuration enforces test access.
+controls the UI disclosure; it does not change Google Cloud's audience configuration.
 
 Gmail requests `gmail.settings.basic` for vacation replies. Calendar requests
 `calendar.events.owned` for native out-of-office events on the primary calendar;
