@@ -226,8 +226,8 @@ export default function App() {
       </header>
       <main>
         <p className="introduction">
-          Let people know when you’re away. Set your out-of-office status in
-          Slack and GitHub with one button.
+          Let people know when you’re away. Set your out-of-office status in all
+          your apps with one button.
         </p>
 
         {notice && (
