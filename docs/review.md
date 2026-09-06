@@ -35,3 +35,30 @@ Remaining findings: Standards 0; Spec 0. Both original P2 findings are resolved.
 - Railway’s initial Docker build and PostgreSQL-backed server startup succeed.
 - Live provider status changes are not exercised; automated tests simulate provider
   HTTP responses, and production OAuth setup requires the owner’s authentication.
+
+
+# Multiple connected accounts
+
+Reviewed `252893c...a80d4de` against the updated `docs/spec.md`.
+
+## Standards
+
+No documented-standard breaches or substantive new Fowler smell findings. Ownership
+checks, guarded upserts, targeted reconnection, migration preservation, and independent
+status results remain intact.
+
+## Spec
+
+No findings. Multiple identities per provider, independent messages/results/disconnects,
+existing-account preservation, preview/copy removal, and the palm favicon are implemented.
+Google integrations remain the next milestone.
+
+## Validation
+
+- All 12 HTTP tests pass with the race detector; Go vet and the frontend build pass.
+- The legacy-schema migration and restart test passes on SQLite and PostgreSQL.
+- Desktop and mobile UI checked with three simulated accounts, including two Slack
+  accounts, independent message editing, away status results, and the scrollable editor.
+- Simulated UI data is served by a temporary local test server, not product preview mode.
+
+Remaining findings: Standards 0; Spec 0.
