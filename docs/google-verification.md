@@ -4,9 +4,11 @@ Project: `ill-be-back-507818` (number `602786024161`).
 Owner/support/developer contact: `maxhalford25@gmail.com`.
 App name: **I’ll Be Back**. Hosting: Railway; backend: Go.
 
-Status: implementation prepared; Google access is for testing until verification
-finishes. No security assessment has been purchased or booked. An owned public
-domain and a real demonstration on supported accounts are still needed.
+Status: integrations deployed; Gmail and Calendar APIs enabled; external OAuth
+client, declared scopes, branding links and the owner's test-user access configured.
+Google access remains in testing until verification finishes. No security assessment
+has been purchased or booked. Site ownership verification and a real demonstration
+on supported accounts are still needed.
 
 ## OAuth configuration
 
@@ -40,10 +42,13 @@ sign-in identity. Different Google subjects are not merged by email.
 
 ## Before submitting
 
-1. Choose a domain owned by Max and attach it to Railway. Verify domain ownership
-   in Google Search Console with an account that owns/edits this Cloud project.
-2. Set the canonical `APP_URL`, update all four providers' callbacks and the Google
-   client redirects. Use the same public name throughout.
+1. Verify the current Railway hostname as a URL-prefix property in Google Search
+   Console with the project owner. Google accepts the full Railway hostname as an
+   authorized domain. The ownership meta tag is in `frontend/index.html`; retain it
+   after verification. A custom domain is optional for this step.
+2. If adopting a custom domain later, verify it too, set the canonical `APP_URL`,
+   and update all four providers' callbacks and Google client redirects. Use the
+   same public name throughout.
 3. In Branding, set homepage to the canonical origin, privacy to `/privacy` and
    terms to `/terms`, and add the owned domain. These pages are publicly accessible
    without signing in. Confirm the privacy text matches actual operations and the
