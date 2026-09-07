@@ -2,7 +2,7 @@
 
 Etiquette in corporate jobs and startups is to indicate when you're away. Especially if you're customer facing. But for some reason I always forget, so I made this [app](https://ill-be-back-production.up.railway.app) to set the out-of-office status on all my apps in one click. While I'm at it, I also recommend [Slapss](https://slapss-app.com/), which helps not being late in meetings, which is also frowned upon.
 
-Vibe coded with Astra in Codex. Go on the back, React on the front.
+Vibe coded with Astra in Codex. Go on the back, React on the front. Style adapted from [Playa Phone](https://playaphone.com/).
 
 ## Run it locally
 
