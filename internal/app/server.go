@@ -17,14 +17,15 @@ import (
 )
 
 type Config struct {
-	DatabaseURL, AppURL, StaticDir     string
-	EncryptionKey                      []byte
-	GitHubClientID, GitHubClientSecret string
-	SlackClientID, SlackClientSecret   string
-	GoogleClientID, GoogleClientSecret string
-	GoogleVerified                     bool
-	HTTPClient                         *http.Client
-	Development                        bool
+	DatabaseURL, AppURL, StaticDir           string
+	EncryptionKey                            []byte
+	GitHubClientID, GitHubClientSecret       string
+	SlackClientID, SlackClientSecret         string
+	GoogleClientID, GoogleClientSecret       string
+	MicrosoftClientID, MicrosoftClientSecret string
+	GoogleVerified                           bool
+	HTTPClient                               *http.Client
+	Development                              bool
 }
 
 type Server struct {
@@ -189,7 +190,7 @@ type appState struct {
 }
 
 func (a *Server) respondState(w http.ResponseWriter, r *http.Request, s session) {
-	result := appState{Authenticated: s.account != "", DesiredStatus: "available", Connections: []Connection{}, CSRFToken: s.csrf, Providers: map[string]bool{"github": a.enabled("github"), "slack": a.enabled("slack"), "gmail": a.enabled("gmail"), "calendar": a.enabled("calendar")}}
+	result := appState{Authenticated: s.account != "", DesiredStatus: "available", Connections: []Connection{}, CSRFToken: s.csrf, Providers: map[string]bool{"github": a.enabled("github"), "slack": a.enabled("slack"), "gmail": a.enabled("gmail"), "calendar": a.enabled("calendar"), "teams": a.enabled("teams"), "outlook": a.enabled("outlook")}}
 	result.GoogleTesting = a.enabled("gmail") && !a.cfg.GoogleVerified
 	if s.account != "" {
 		err := a.store.db.QueryRowContext(r.Context(), `SELECT name,desired_status,return_at FROM accounts WHERE id=$1`, s.account).Scan(&result.Name, &result.DesiredStatus, &result.ReturnAt)

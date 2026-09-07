@@ -55,6 +55,7 @@ func run() error {
 	a, err := app.New(app.Config{DatabaseURL: dsn, AppURL: appURL, StaticDir: staticDir, EncryptionKey: key, Development: *dev,
 		GitHubClientID: os.Getenv("GITHUB_CLIENT_ID"), GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
 		GoogleClientID: os.Getenv("GOOGLE_CLIENT_ID"), GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		MicrosoftClientID: os.Getenv("MICROSOFT_CLIENT_ID"), MicrosoftClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
 		GoogleVerified: os.Getenv("GOOGLE_VERIFIED") == "true",
 		SlackClientID:  os.Getenv("SLACK_CLIENT_ID"), SlackClientSecret: os.Getenv("SLACK_CLIENT_SECRET")})
 	if err != nil {

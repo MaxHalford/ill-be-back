@@ -1,20 +1,12 @@
-# I’ll Be Back
+# I’ll Be Back 🌴
 
-[Open the app](https://ill-be-back-production.up.railway.app)
+Etiquette in corporate jobs and startups is to indicate when you're away. Especially if you're customer facing. But for some reason I always forget, so I made this [app](https://ill-be-back-production.up.railway.app) to set the out-of-office status on all my apps in one click. While I'm at it, I also recommend [Slapss](https://slapss-app.com/), which helps not being late in meetings, which is also frowned upon.
 
-One switch to announce your absence across GitHub, Slack, Gmail and Google Calendar.
-Press **I’m away** to apply your saved per-account messages; press **I’m back** to clear
-them. Calendar asks for a return time and ends automatically; the other apps remain
-away until you return. No recurring schedules or notification controls.
-Google OAuth is in production with verification pending; Google's unverified-app
-warning and user cap still apply.
+Vibe coded with Codex + Astra. Go on the back, React on the front.
 
-Go backend (`net/http`, `database/sql`), React + TypeScript frontend, SQLite locally,
-PostgreSQL on Railway. The same Go binary serves the API and compiled frontend.
+## Run it locally
 
-## Local development
-
-Requires Go 1.26+ and Node 22+.
+You’ll need Go 1.26+ and Node 22+.
 
 ```sh
 cd frontend
@@ -24,143 +16,6 @@ cd ..
 go run ./cmd/server -dev
 ```
 
-Open http://localhost:8000. Connect an account using configured OAuth credentials.
-Development mode generates a local encryption key in `data/token.key` and uses `data/app.db`; keep them together.
+Open [localhost:8000](http://localhost:8000). To connect real accounts, set the OAuth credentials listed in [.env.example](.env.example) in your shell; `.env` files aren’t loaded automatically.
 
-For frontend hot reload, run `npm run dev` in `frontend/` while the Go server runs.
-Vite proxies `/api` and `/auth` to port 8000. OAuth returns to `APP_URL` (the Go server).
-
-Environment variables are read from the process environment. `.env.example` documents
-them; `.env` files are not loaded automatically. For a local OAuth configuration:
-
-```sh
-set -a
-source .env
-set +a
-go run ./cmd/server -dev
-```
-
-Use separate local OAuth apps with callbacks on `http://localhost:8000`.
-
-## OAuth setup
-
-Connecting the first account also signs the user in. While signed in, use **Add an app**
-and choose a provider in the picker to connect more accounts. Each connection
-has its own message and update result; the main switch updates all of them. Slack identities
-include both workspace and user, so multiple users in one workspace are supported.
-Any connected identity can sign back into the same account. An external identity belongs
-to only one account; accounts are never merged by email. Authorizing the same identity
-again refreshes its token without creating a duplicate. Targeted reconnection rejects
-a different identity. Disconnecting one connection leaves the others intact.
-
-### GitHub
-
-1. Register an OAuth App at https://github.com/settings/applications/new.
-2. Set Homepage URL to `APP_URL`, callback to `APP_URL/auth/github/callback`.
-3. Disable **Expire user access tokens** for this release. Token refresh is not implemented.
-4. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` on the server.
-
-The app requests the `user` scope for profile status updates (no repository scope).
-It uses OAuth state, session rotation and GitHub PKCE. Away sets `message`,
-`:palm_tree:`, and `limitedAvailability: true`, without an expiry. Back clears the
-message and emoji and disables limited availability; it does not restore an old status.
-
-### Slack
-
-1. Sign in at https://api.slack.com/apps and create an app using
-   [`deploy/slack-manifest.json`](deploy/slack-manifest.json).
-2. Replace the example callback with `APP_URL/auth/slack/callback` if your domain differs.
-3. Keep token rotation disabled. This release requires non-rotating user tokens.
-4. Set `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` from Basic Information on the server.
-5. Enable public distribution to allow installation in other workspaces when launching
-   beyond your own workspace. Workspace owners may require approval.
-
-Only the user scope `users.profile:write` is requested. Slack’s own availability dot,
-DND, and notification preferences are unchanged. The status text and palm emoji have
-no expiry. Back clears both. The app uses the installing user’s token, never a bot token.
-
-### Google
-
-Configure an external web OAuth client with `APP_URL/auth/gmail/callback` and
-`APP_URL/auth/calendar/callback`. Enable Gmail API and Google Calendar API and set
-`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Keep `GOOGLE_VERIFIED=false` until
-Google approves the public app and production publishing is enabled. This flag only
-controls the UI disclosure; it does not change Google Cloud's audience configuration.
-
-Gmail requests `gmail.settings.basic` for vacation replies. Calendar requests
-`calendar.events.owned` for native out-of-office events on the primary calendar;
-only supported work accounts can use these. Both also request `openid email`.
-Refresh credentials are encrypted; access tokens are renewed for each action.
-Gmail's existing recipient restrictions are preserved. Calendar does not decline
-invitations. See [the verification guide](docs/google-verification.md) for review
-requirements, scope justifications and the demonstration script.
-
-## Railway deployment
-
-The Dockerfile builds both applications and runs an unprivileged, static Go binary.
-`railway.json` configures the `/healthz` deployment check. No separate worker is needed.
-
-1. Create a project with PostgreSQL and an `ill-be-back` service.
-2. Deploy this repository to the service. Dockerfile detection is automatic.
-3. Generate a service domain and set:
-
-   | Variable | Value |
-   | --- | --- |
-   | `APP_URL` | The generated `https://…up.railway.app` origin, without a trailing slash |
-   | `PORT` | `8000` |
-   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-   | `TOKEN_ENCRYPTION_KEY` | Output of `openssl rand -base64 32` |
-   | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials |
-   | `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | Slack app credentials |
-
-4. Update both providers’ redirect URLs to this domain and deploy.
-
-Back up PostgreSQL and the encryption key separately. Changing that key makes stored
-provider tokens unreadable and requires reconnection. Production refuses to start
-without a database, a valid key, and an HTTPS origin. SQLite deployment is possible
-with a writable persistent volume, but PostgreSQL is recommended for Railway.
-
-## Behavior and reliability
-
-- Tokens are encrypted with AES-256-GCM and bound to their provider identity.
-- Sessions are opaque random cookies, hashed in the database; cookies are HTTP-only,
-  SameSite=Lax and secure in production. Mutations require a session-bound CSRF token
-  and reject cross-origin requests.
-- Each connected account’s result is persisted separately. Unknown or failed results never count
-  as synchronized. Successful updates remain when another integration fails.
-- Account-level database leases serialize mutations across tabs and server instances.
-  Accepted switches finish within a bounded timeout even if the browser disconnects.
-- The dashboard shows the last confirmed write, not a continuous live monitor of changes
-  made directly in Slack/GitHub. Pressing the switch writes the requested state again.
-- Saving messages changes the next away message; it does not silently change an active
-  status. The displayed status retains the message actually applied.
-- Disconnect clears the provider status before removing its token. If clearing fails,
-  the connection is retained for retry/reconnection. Removing the last connection also
-  deletes the account and its sessions. Signing out alone leaves statuses unchanged.
-- **Delete account and data** removes local data even if provider access is revoked.
-  It explicitly leaves external statuses, vacation replies and Calendar events in
-  place. Users should clear them before deletion or directly in the providers.
-
-## Checks
-
-```sh
-go vet ./...
-go test -race ./...
-cd frontend
-npm run typecheck
-npm run build
-npx prettier --check src
-```
-
-Tests exercise the HTTP API with real sessions and SQLite persistence. External provider
-HTTP responses are simulated; the suite never changes a real account’s status. It covers
-OAuth replay, account isolation, CSRF, message validation, exact status payloads, partial
-failure/reconnection, malformed provider replies, concurrent switches, and disconnection.
-
-The confirmed scope is in [`docs/spec.md`](docs/spec.md). The interface uses a simple
-white page, blue accents, and system fonts, inspired by https://playaphone.com/.
-
-Database upgrades run transactionally at startup and preserve existing connections,
-sessions, encrypted tokens, and messages. Tests cover upgrading the original schema and
-restarting. Set `TEST_POSTGRES_URL` to an **empty disposable database** to also run that
-upgrade test against PostgreSQL.
+For the fiddly bits: [Google setup](docs/google-verification.md), [Microsoft setup](docs/microsoft-setup.md), and the [Slack app manifest](deploy/slack-manifest.json).

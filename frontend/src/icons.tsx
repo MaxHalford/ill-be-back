@@ -1,6 +1,36 @@
 import type { Provider } from "./types";
 
-export function AppIcon({ app }: { app: Provider | "gmail" | "calendar" }) {
+export function AppIcon({ app }: { app: Provider }) {
+  if (app === "teams")
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="15" cy="5" r="3" fill="#7b83eb" />
+        <circle cx="21" cy="7" r="2" fill="#5059c9" />
+        <path d="M18 11h6v5a3 3 0 0 1-6 0z" fill="#5059c9" />
+        <path d="M8 10h12v7a6 6 0 0 1-12 0z" fill="#7b83eb" />
+        <rect x="1" y="7" width="12" height="13" rx="1" fill="#464eb8" />
+        <path d="M4 10h6v2H8v6H6v-6H4z" fill="white" />
+      </svg>
+    );
+  if (app === "outlook")
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="8" y="2" width="13" height="17" rx="1" fill="#0078d4" />
+        <path d="M10 5h8v3h-8z" fill="#50d9ff" />
+        <path d="M8 11h15v10H8z" fill="#28a8ea" />
+        <path d="m8 11 7.5 6 7.5-6v10H8z" fill="#1490df" />
+        <rect x="1" y="6" width="12" height="14" rx="1" fill="#106ebe" />
+        <ellipse
+          cx="7"
+          cy="13"
+          rx="3"
+          ry="4"
+          fill="none"
+          stroke="white"
+          strokeWidth="1.8"
+        />
+      </svg>
+    );
   if (app === "github")
     return (
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

@@ -74,6 +74,9 @@ func slackError(ok bool, code string) error {
 }
 
 func (a *Server) setStatus(ctx context.Context, c Connection, target string) error {
+	if isMicrosoft(c.Provider) {
+		return a.setMicrosoftStatus(ctx, c, target)
+	}
 	if c.Provider == "calendar" {
 		return a.setCalendarStatus(ctx, c, target)
 	}
@@ -142,6 +145,9 @@ func (a *Server) setStatus(ctx context.Context, c Connection, target string) err
 type identity struct{ remoteID, label, name, token string }
 
 func (a *Server) exchange(ctx context.Context, provider, code, verifier string) (identity, error) {
+	if isMicrosoft(provider) {
+		return a.exchangeMicrosoft(ctx, provider, code, verifier)
+	}
 	if isGoogle(provider) {
 		return a.exchangeGoogle(ctx, provider, code, verifier)
 	}

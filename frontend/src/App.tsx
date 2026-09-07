@@ -19,18 +19,24 @@ const names: Record<Provider, string> = {
   slack: "Slack",
   gmail: "Gmail",
   calendar: "Google Calendar",
+  teams: "Microsoft Teams",
+  outlook: "Outlook",
 };
 const limits: Record<Provider, number> = {
   github: 80,
   slack: 100,
   gmail: 1000,
   calendar: 100,
+  teams: 100,
+  outlook: 1000,
 };
 const descriptions: Record<Provider, string> = {
   github: "Profile status and availability",
   slack: "Profile status in your workspace",
   gmail: "Vacation replies using your saved message",
   calendar: "Out-of-office events · supported work accounts only",
+  teams: "Status message · work or school accounts only",
+  outlook: "Automatic replies · Microsoft 365 and Outlook.com",
 };
 function localDateTime(value: string) {
   const date = new Date(value);
@@ -45,7 +51,14 @@ const empty: AppState = {
   desiredStatus: "available",
   returnAt: "",
   connections: [],
-  providers: { github: false, slack: false, gmail: false, calendar: false },
+  providers: {
+    github: false,
+    slack: false,
+    gmail: false,
+    calendar: false,
+    teams: false,
+    outlook: false,
+  },
   csrfToken: "",
 };
 export default function App() {
@@ -107,6 +120,8 @@ export default function App() {
         cancelled:
           "Connection cancelled. You can try again whenever you’re ready.",
         oauth: "We couldn’t connect that account. Please try again.",
+        microsoft_approval:
+          "Microsoft couldn’t complete sign-in. Check that your account is supported; your organization may require administrator approval.",
         state: "That connection link expired. Please try connecting again.",
         wrong_account:
           "That is a different account. Please reconnect using the original account.",
@@ -282,27 +297,32 @@ export default function App() {
 
   const connectionButtons = (
     <div className="connect-options">
-      {(["slack", "github", "gmail", "calendar"] as Provider[]).map(
-        (provider) => (
-          <a
-            key={provider}
-            className={`connect-option ${!state.providers[provider] || busy ? "disabled" : ""}`}
-            href={
-              state.providers[provider] && !busy
-                ? `/auth/${provider}`
-                : undefined
-            }
-            aria-disabled={!state.providers[provider] || busy}
-          >
-            <AppIcon app={provider} />
-            <span>
-              {names[provider]}
-              <small>{descriptions[provider]}</small>
-              {!state.providers[provider] && <small>Not available yet</small>}
-            </span>
-          </a>
-        ),
-      )}
+      {(
+        [
+          "slack",
+          "github",
+          "gmail",
+          "calendar",
+          "teams",
+          "outlook",
+        ] as Provider[]
+      ).map((provider) => (
+        <a
+          key={provider}
+          className={`connect-option ${!state.providers[provider] || busy ? "disabled" : ""}`}
+          href={
+            state.providers[provider] && !busy ? `/auth/${provider}` : undefined
+          }
+          aria-disabled={!state.providers[provider] || busy}
+        >
+          <AppIcon app={provider} />
+          <span>
+            {names[provider]}
+            <small>{descriptions[provider]}</small>
+            {!state.providers[provider] && <small>Not available yet</small>}
+          </span>
+        </a>
+      ))}
     </div>
   );
 
@@ -497,6 +517,8 @@ export default function App() {
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="mailto:maxhalford25@gmail.com">Support</a>
+        <a href="https://github.com/MaxHalford/ill-be-back">Source on GitHub</a>
+        <span className="build-credit">Vibe coded with Codex + Astra</span>
       </footer>
       <dialog
         ref={dialog}
@@ -621,14 +643,16 @@ export default function App() {
                     </span>
                     <span className="message-account">{c.label}</span>
                     <div className="input-wrap">
-                      {c.provider !== "gmail" && <span>🌴</span>}
-                      {c.provider === "gmail" ? (
+                      {c.provider !== "gmail" && c.provider !== "outlook" && (
+                        <span>🌴</span>
+                      )}
+                      {c.provider === "gmail" || c.provider === "outlook" ? (
                         <textarea
                           value={messages[c.id] || ""}
                           onChange={(e) =>
                             setMessages({ ...messages, [c.id]: e.target.value })
                           }
-                          maxLength={limits.gmail}
+                          maxLength={limits[c.provider]}
                           required
                           rows={4}
                           aria-label={`${names[c.provider]} ${c.label} away message`}

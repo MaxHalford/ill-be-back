@@ -12,6 +12,9 @@ import (
 )
 
 func (a *Server) enabled(p string) bool {
+	if isMicrosoft(p) {
+		return a.cfg.MicrosoftClientID != "" && a.cfg.MicrosoftClientSecret != ""
+	}
 	return (isGoogle(p) && a.cfg.GoogleClientID != "" && a.cfg.GoogleClientSecret != "") || (p == "github" && a.cfg.GitHubClientID != "" && a.cfg.GitHubClientSecret != "") || (p == "slack" && a.cfg.SlackClientID != "" && a.cfg.SlackClientSecret != "")
 }
 func (a *Server) oauthError(w http.ResponseWriter, r *http.Request, code string) {
@@ -58,6 +61,16 @@ func (a *Server) oauthStart(w http.ResponseWriter, r *http.Request) {
 		challenge := sha256.Sum256([]byte(verifier))
 		params.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
 		params.Set("code_challenge_method", "S256")
+	} else if isMicrosoft(p) {
+		endpoint = microsoftAuthority(p) + "authorize"
+		params.Set("client_id", a.cfg.MicrosoftClientID)
+		params.Set("response_type", "code")
+		params.Set("response_mode", "query")
+		params.Set("scope", microsoftScopes(p))
+		params.Set("prompt", "select_account")
+		challenge := sha256.Sum256([]byte(verifier))
+		params.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
+		params.Set("code_challenge_method", "S256")
 	} else if isGoogle(p) {
 		endpoint = "https://accounts.google.com/o/oauth2/v2/auth"
 		params.Set("client_id", a.cfg.GoogleClientID)
@@ -96,6 +109,10 @@ func (a *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("error") != "" {
+		if isMicrosoft(p) && r.URL.Query().Get("error") != "access_denied" {
+			a.oauthError(w, r, "microsoft_approval")
+			return
+		}
 		a.oauthError(w, r, "cancelled")
 		return
 	}
@@ -154,6 +171,8 @@ func (a *Server) linkIdentity(ctx context.Context, s session, provider string, i
 	var owner string
 	if isGoogle(provider) {
 		err = tx.QueryRowContext(ctx, `SELECT account_id FROM google_identities WHERE remote_id=$1`, id.remoteID).Scan(&owner)
+	} else if isMicrosoft(provider) {
+		err = tx.QueryRowContext(ctx, `SELECT account_id FROM microsoft_identities WHERE remote_id=$1`, id.remoteID).Scan(&owner)
 	} else {
 		err = tx.QueryRowContext(ctx, `SELECT account_id FROM connections WHERE provider=$1 AND remote_id=$2`, provider, id.remoteID).Scan(&owner)
 	}
@@ -175,6 +194,19 @@ func (a *Server) linkIdentity(ctx context.Context, s session, provider string, i
 	}
 	if isGoogle(provider) {
 		result, err := tx.ExecContext(ctx, `INSERT INTO google_identities(remote_id,account_id) VALUES($1,$2) ON CONFLICT(remote_id) DO UPDATE SET account_id=excluded.account_id WHERE google_identities.account_id=excluded.account_id`, id.remoteID, account)
+		if err != nil {
+			return session{}, "", err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return session{}, "", err
+		}
+		if count != 1 {
+			return session{}, "", errLinked
+		}
+	}
+	if isMicrosoft(provider) {
+		result, err := tx.ExecContext(ctx, `INSERT INTO microsoft_identities(remote_id,account_id) VALUES($1,$2) ON CONFLICT(remote_id) DO UPDATE SET account_id=excluded.account_id WHERE microsoft_identities.account_id=excluded.account_id`, id.remoteID, account)
 		if err != nil {
 			return session{}, "", err
 		}

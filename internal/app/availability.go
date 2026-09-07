@@ -174,7 +174,7 @@ func (a *Server) messages(w http.ResponseWriter, r *http.Request) {
 		if c.Provider == "github" {
 			limit = 80
 		}
-		if c.Provider == "gmail" {
+		if c.Provider == "gmail" || c.Provider == "outlook" {
 			limit = 1000
 		}
 		message = strings.TrimSpace(message)
@@ -296,6 +296,13 @@ func (a *Server) disconnect(w http.ResponseWriter, r *http.Request) {
 	}
 	if isGoogle(found.Provider) {
 		_, err = tx.ExecContext(ctx, `DELETE FROM google_identities WHERE account_id=$1 AND remote_id=$2 AND NOT EXISTS (SELECT 1 FROM connections WHERE account_id=$1 AND remote_id=$2 AND provider IN ('gmail','calendar'))`, s.account, found.remoteID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	if isMicrosoft(found.Provider) {
+		_, err = tx.ExecContext(ctx, `DELETE FROM microsoft_identities WHERE account_id=$1 AND remote_id=$2 AND NOT EXISTS (SELECT 1 FROM connections WHERE account_id=$1 AND remote_id=$2 AND provider IN ('teams','outlook'))`, s.account, found.remoteID)
 		if err != nil {
 			internalError(w, err)
 			return

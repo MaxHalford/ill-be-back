@@ -405,11 +405,15 @@ dialog::backdrop {
 }
 footer {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 12px 20px;
   border-top: 1px solid #ddd;
   margin-top: 32px;
   padding-top: 18px;
   font-size: 13px;
+}
+.build-credit {
+  color: #666;
 }
 .delete-actions {
   display: flex;

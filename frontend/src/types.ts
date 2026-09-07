@@ -1,4 +1,5 @@
-export type Provider = "github" | "slack" | "gmail" | "calendar";
+export type Provider =
+  "github" | "slack" | "gmail" | "calendar" | "teams" | "outlook";
 export type Availability = "available" | "away";
 export type Connection = {
   id: string;

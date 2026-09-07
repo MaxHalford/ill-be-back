@@ -247,5 +247,8 @@ func (s *store) migrateConnections(ctx context.Context, driver string) error {
 			}
 		}
 	}
+	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS microsoft_identities (remote_id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE)`); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
